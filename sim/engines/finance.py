@@ -1,0 +1,370 @@
+"""
+Finance engine — Income Statement, Balance Sheet, Cash Flow, Bonds.
+
+Per Capsim:
+  - Income tax = 35% flat
+  - Profit sharing = 1% of net profit (after tax)
+  - Bond: 10-year term, 5% brokerage fee on issuance
+  - New bond rate = current LT interest rate + 1.4% spread
+  - Max bond debt = 80% × gross plant value
+  - Current debt rate ≈ prime + 0.5% (short-term)
+  - Emergency loan rate = current debt rate + 7.5% penalty
+  - Stock issuance: $500K fee + commissions
+  - Stock buyback: at current market price
+  - Bond early retirement: 1.5% fee + premium over face
+
+Reference: Capstone User Guide §4.5 Finance
+"""
+from __future__ import annotations
+from typing import List, Optional, Dict
+from sim.data_models import Company, Bond, Product, FinanceDecision
+from sim.engines.production import plant_value, annual_depreciation, inventory_carry_cost, labor_cost_factor
+
+
+# Constants
+TAX_RATE = 0.35
+PROFIT_SHARING_RATE = 0.01      # 1% of net profit
+BOND_BROKERAGE_FEE = 0.05       # 5% on issuance
+BOND_NEW_SPREAD = 0.014         # +1.4% over current rate
+BOND_TERM_YEARS = 10
+MAX_BOND_DEBT_RATIO = 0.80      # max bond debt as fraction of plant value
+EMERGENCY_LOAN_PENALTY = 0.075  # +7.5% over current debt rate
+EARLY_RETIRE_FEE = 0.015        # 1.5% of face value
+STOCK_ISSUE_FEE = 500_000
+
+
+def short_term_rate(prime_rate: float) -> float:
+    return prime_rate + 0.005
+
+
+def long_term_rate(prime_rate: float, sp_rating: str = "BB") -> float:
+    """LT rate depends on credit rating. AAA = prime+1%, lower = more spread."""
+    spread_by_rating = {
+        "AAA": 0.010, "AA": 0.015, "A": 0.020, "BBB": 0.030,
+        "BB": 0.040, "B": 0.055, "CCC": 0.075, "CC": 0.090,
+        "C": 0.110, "DDD": 0.130, "DD": 0.150, "D": 0.180,
+    }
+    return prime_rate + spread_by_rating.get(sp_rating, 0.060)
+
+
+def emergency_loan_rate(prime_rate: float) -> float:
+    return short_term_rate(prime_rate) + EMERGENCY_LOAN_PENALTY
+
+
+def bond_market_price(bond: Bond, current_lt_rate: float) -> float:
+    """
+    Compute approximate bond market price per $100 face given current LT rate.
+    Higher current rates -> lower bond prices (and vice versa).
+    Simplified: price ~ 100 × (coupon / current_rate)
+    """
+    if current_lt_rate <= 0:
+        return 100.0
+    return min(120.0, max(60.0, 100.0 * bond.coupon_rate / current_lt_rate))
+
+
+def calculate_credit_rating(leverage: float) -> str:
+    """
+    Credit rating from leverage (Assets/Equity).
+    Per Capsim guide: AAA at 1.0, drops 1 rating per ~0.5 leverage point.
+    """
+    if leverage <= 1.0: return "AAA"
+    if leverage <= 1.5: return "AA"
+    if leverage <= 2.0: return "A"
+    if leverage <= 2.5: return "BBB"
+    if leverage <= 3.0: return "BB"
+    if leverage <= 3.5: return "B"
+    if leverage <= 4.0: return "CCC"
+    if leverage <= 4.5: return "CC"
+    if leverage <= 5.0: return "C"
+    if leverage <= 5.5: return "DDD"
+    if leverage <= 6.0: return "DD"
+    return "D"
+
+
+def max_new_bond_capacity(company: Company) -> float:
+    """How much more bond debt the company can take on."""
+    plant = sum(plant_value(p) for p in company.products)
+    cap = plant * MAX_BOND_DEBT_RATIO
+    current_bonds = sum(b.face_value for b in company.bonds)
+    return max(0.0, cap - current_bonds)
+
+
+def issue_bond(company: Company, amount: float, prime_rate: float, year: int) -> Dict:
+    """
+    Issue a new bond. Returns dict with details.
+    Limited by max bond capacity.
+    """
+    available = max_new_bond_capacity(company)
+    amount = min(amount, available)
+    if amount <= 0:
+        return {"issued": 0, "net_proceeds": 0, "rate": 0, "fee": 0, "series": None}
+
+    rate = long_term_rate(prime_rate, company.sp_rating) + 0.005  # +0.5% over LT rate base
+    fee = amount * BOND_BROKERAGE_FEE
+    net_proceeds = amount - fee
+
+    series = f"{rate*100:.1f}S{year + BOND_TERM_YEARS}"
+    new_bond = Bond(
+        series=series,
+        face_value=amount,
+        coupon_rate=rate,
+        year_due=year + BOND_TERM_YEARS,
+        market_close=100.0,
+        yield_to_maturity=rate,
+    )
+    company.bonds.append(new_bond)
+    company.cash += net_proceeds
+    return {
+        "issued": amount,
+        "net_proceeds": net_proceeds,
+        "rate": rate,
+        "fee": fee,
+        "series": series,
+    }
+
+
+def retire_bond_early(company: Company, series: str) -> Dict:
+    """
+    Retire a bond before maturity. Pays face × market_price/100 + 1.5% fee.
+    """
+    bond = next((b for b in company.bonds if b.series == series), None)
+    if bond is None:
+        return {"retired": 0, "cash_out": 0, "fee": 0}
+
+    market_price = bond.market_close / 100.0
+    cash_paid = bond.face_value * market_price
+    fee = bond.face_value * EARLY_RETIRE_FEE
+    total_out = cash_paid + fee
+
+    company.cash -= total_out
+    company.bonds.remove(bond)
+
+    return {
+        "retired": bond.face_value,
+        "cash_out": total_out,
+        "fee": fee,
+        "market_price": market_price,
+    }
+
+
+def retire_matured_bonds(company: Company, current_year: int) -> List[Dict]:
+    """
+    Retire bonds that have matured (year_due <= current_year).
+    Pays face value out of cash (or converts to current debt if cash short).
+    """
+    results = []
+    for bond in list(company.bonds):
+        if bond.year_due <= current_year:
+            company.cash -= bond.face_value
+            company.bonds.remove(bond)
+            results.append({"matured": bond.series, "amount": bond.face_value})
+    return results
+
+
+def total_bond_interest(company: Company) -> float:
+    """Annual interest on all outstanding bonds."""
+    return sum(b.face_value * b.coupon_rate for b in company.bonds)
+
+
+def issue_stock(company: Company, amount: float, current_price: Optional[float] = None) -> Dict:
+    """Issue new stock. Adds to common_stock + cash, dilutes shares.
+    Rejects if amount <= $500K fee (would create negative net proceeds)."""
+    if current_price is None:
+        current_price = company.stock_price
+    if current_price <= 0 or amount <= STOCK_ISSUE_FEE:
+        return {"issued": 0, "shares": 0, "net": 0, "fee": 0, "rejected": True}
+    fee = STOCK_ISSUE_FEE
+    net = amount - fee
+    new_shares = int(net / current_price)
+    if new_shares <= 0:
+        return {"issued": 0, "shares": 0, "net": 0, "fee": 0, "rejected": True}
+    company.shares_outstanding += new_shares
+    company.common_stock += net
+    company.cash += net
+    return {"issued": amount, "shares": new_shares, "net": net, "fee": fee}
+
+
+def buyback_stock(company: Company, amount: float, current_price: Optional[float] = None) -> Dict:
+    """Buy back shares at current market price. Reduces shares and equity."""
+    if current_price is None:
+        current_price = company.stock_price
+    if current_price <= 0 or amount <= 0:
+        return {"bought": 0, "shares": 0}
+    shares = int(amount / current_price)
+    company.shares_outstanding -= shares
+    company.retained_earnings -= amount  # reduces equity
+    company.cash -= amount
+    return {"bought": amount, "shares": shares, "price": current_price}
+
+
+def pay_dividend(company: Company, per_share: float) -> float:
+    """Pay dividend per share. Returns total cash out."""
+    total = per_share * company.shares_outstanding
+    company.cash -= total
+    company.retained_earnings -= total
+    return total
+
+
+def emergency_loan_if_needed(company: Company, prime_rate: float) -> float:
+    """If cash < 0, take emergency loan at penalty rate."""
+    if company.cash >= 0:
+        return 0
+    loan = -company.cash
+    company.cash = 0
+    company.current_debt += loan
+    company.emergency_loan = loan
+    return loan
+
+
+def update_stock_price(company: Company) -> float:
+    """
+    Stock price update based on Book Value, EPS, Dividend.
+
+    Calibrated to match Andrews R0 ($95.38) with seed values:
+    BV/share $34.65 + EPS $9.80 + Div $6.50
+    Formula: BV + 3.0×EPS + 5.0×Div = 34.65 + 29.4 + 32.5 = $96.55 ≈ $95.38 ✓
+    """
+    bv_per_share = (company.total_equity / company.shares_outstanding
+                    if company.shares_outstanding > 0 else 0)
+    eps = company.eps
+    div = company.dividend_per_share
+    new_price = bv_per_share + 3.0 * eps + 5.0 * div
+    company.stock_price = max(1.0, new_price)
+    company.market_cap = company.stock_price * company.shares_outstanding
+    return company.stock_price
+
+
+def compute_ratios(company: Company) -> Dict:
+    """Compute key financial ratios."""
+    sales = max(1, company.sales_last)
+    assets = max(1, company.total_assets)
+    equity = max(1, company.total_equity)
+
+    ros = company.profit_last / sales
+    asset_turnover = sales / assets
+    roa = company.profit_last / assets
+    leverage = assets / equity
+    roe = company.profit_last / equity
+
+    company.ros = ros
+    company.asset_turnover = asset_turnover
+    company.roa = roa
+    company.leverage = leverage
+    company.roe = roe
+    company.sp_rating = calculate_credit_rating(leverage)
+    return {
+        "ROS": ros, "Asset_Turnover": asset_turnover, "ROA": roa,
+        "Leverage": leverage, "ROE": roe, "S&P": company.sp_rating,
+    }
+
+
+def income_statement(company: Company, year: int, prime_rate: float,
+                     hr_admin_cost: float = 0, tqm_spend: float = 0,
+                     rd_cost: float = 0) -> Dict:
+    """
+    Compute Income Statement with proper cost reductions applied.
+
+    Sales = sum(units_sold_last × price) × 1000  (units in thousands)
+    Variable Costs (per unit) properly applies:
+      - automation reduction via labor_cost_factor(automation, productivity_index)
+      - HR productivity_index (better workers = less labor cost per unit)
+      - TQM material_cost_reduction
+      - TQM labor_cost_reduction
+    Contribution Margin = Sales - Variable
+    SGA = R&D + Promo + Sales Budget + Admin (after TQM admin reduction) + HR Admin
+    EBIT = CM - Depreciation - SGA - Other (TQM round spend)
+    """
+    sales = sum(p.units_sold_last * p.price for p in company.products) * 1000
+
+    # Pull HR + TQM effects
+    pi = company.hr.productivity_index
+    tqm_mat = company.tqm.material_cost_reduction      # negative = reduction
+    tqm_lab = company.tqm.labor_cost_reduction
+    tqm_adm = company.tqm.admin_cost_reduction
+
+    # Variable costs — labor_cost in seed is ALREADY post-automation (from Inquirer).
+    # Apply HR productivity_index, TQM reductions, AND 2nd-shift labor premium (1.5×).
+    # Use units_PRODUCED (not sold) — Capsim charges variable cost on production; unsold goes to inventory.
+    from sim.engines.production import SECOND_SHIFT_LABOR_MULTIPLIER
+    var_labor = 0.0
+    var_material = 0.0
+    for p in company.products:
+        # Base effective labor (1st shift): post-automation × HR × TQM
+        base_labor = p.labor_cost / max(0.5, pi) * (1 + tqm_lab)
+        prod_units = max(p.units_produced_last, p.units_sold_last)
+        # Split into 1st-shift (regular rate) and 2nd-shift (1.5× premium)
+        first_shift_units = min(prod_units, p.capacity_first_shift)
+        second_shift_units = max(0, prod_units - p.capacity_first_shift)
+        labor_per_product = (first_shift_units * base_labor
+                             + second_shift_units * base_labor * SECOND_SHIFT_LABOR_MULTIPLIER)
+        var_labor += labor_per_product * 1000
+        # Material has no shift premium
+        effective_material = p.material_cost * (1 + tqm_mat)
+        var_material += effective_material * prod_units * 1000
+
+    # Inventory carry: avg of (start, end) × 12% × unit cost
+    inv_carry = sum(inventory_carry_cost(p, p.inventory) for p in company.products)
+    var_total = var_labor + var_material + inv_carry
+    contribution = sales - var_total
+
+    depreciation = sum(annual_depreciation(p) for p in company.products)
+    promo_total = sum(p.promo_budget for p in company.products)
+    sales_total = sum(p.sales_budget for p in company.products)
+    admin_base = sales * 0.015  # 1.5% of sales
+    admin = admin_base * (1 + tqm_adm)  # TQM admin reduction
+    sga = rd_cost + promo_total + sales_total + admin + hr_admin_cost
+    other = tqm_spend
+
+    ebit = contribution - depreciation - sga - other
+    st_interest = company.current_debt * short_term_rate(prime_rate)
+    lt_interest = total_bond_interest(company)
+    pretax = ebit - st_interest - lt_interest
+    taxes = max(0, pretax * TAX_RATE)
+    after_tax = pretax - taxes
+    profit_sharing = max(0, after_tax * PROFIT_SHARING_RATE)
+    net_profit = after_tax - profit_sharing
+
+    company.sales_last = sales
+    company.ebit_last = ebit
+    company.profit_last = net_profit
+    company.cumulative_profit += net_profit
+    company.contribution_margin_last = contribution
+    company.sga_last = sga
+    company.eps = net_profit / company.shares_outstanding if company.shares_outstanding > 0 else 0
+
+    return {
+        "sales": sales,
+        "variable_labor": var_labor,
+        "variable_material": var_material,
+        "inventory_carry": inv_carry,
+        "variable_total": var_total,
+        "contribution_margin": contribution,
+        "depreciation": depreciation,
+        "promo": promo_total,
+        "sales_budget": sales_total,
+        "admin": admin,
+        "hr_admin": hr_admin_cost,
+        "sga": sga,
+        "tqm": tqm_spend,
+        "ebit": ebit,
+        "short_term_interest": st_interest,
+        "long_term_interest": lt_interest,
+        "pretax_income": pretax,
+        "taxes": taxes,
+        "profit_sharing": profit_sharing,
+        "net_profit": net_profit,
+    }
+
+
+if __name__ == "__main__":
+    from sim.data.r0_seed import build_r0_state
+    state = build_r0_state()
+    print("=== Financial summary R0 ===\n")
+    for c in state.companies:
+        ratios = compute_ratios(c)
+        max_bond = max_new_bond_capacity(c)
+        print(f"{c.name}:")
+        print(f"  Sales ${c.sales_last/1e6:.1f}M  Profit ${c.profit_last/1e6:.1f}M  ROS {ratios['ROS']*100:.1f}%")
+        print(f"  Assets ${c.total_assets/1e6:.1f}M  Equity ${c.total_equity/1e6:.1f}M  Lev {ratios['Leverage']:.2f}  Rating {ratios['S&P']}")
+        print(f"  Bonds outstanding ${sum(b.face_value for b in c.bonds)/1e6:.1f}M, max new ${max_bond/1e6:.1f}M")
+        print(f"  Stock ${c.stock_price:.2f}  MarketCap ${c.market_cap/1e6:.0f}M  ROE {ratios['ROE']*100:.1f}%\n")

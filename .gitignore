@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.Python
+env/
+venv/
+*.pkl
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+.cursorignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User runtime save (Cloud will create its own per session)
+sim/save_state.pkl
+sim/save_state.json
+
+# Local Claude config
+.claude/
+
+# Large PDFs (not needed for app to run — source data already in .py)
+*.pdf
+# Keep extracted txt for reference (small)
+# But not large research notes
+CompXM_DeepDive_3Questions.md
+Comp-XM*.txt
+Capstone_User_Guide_v4.txt
+CompXM_Guide2Exam_2026.txt
+Comp-XM_Examination_Guide.txt
+CAPSIM_CompXM_Deep_Research.md
+CompXM_2026_Cheatsheet*
+
+# Build artifacts
+make_*.py
+*_v2.pdf
