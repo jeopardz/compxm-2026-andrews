@@ -1566,25 +1566,6 @@ with tab_tqm:
         ])
         st.dataframe(ci_df, use_container_width=True, hide_index=True)
 
-    st.divider()
-
-    # The big ADVANCE ROUND button
-    advance_col1, advance_col2, advance_col3 = st.columns([1, 2, 1])
-    with advance_col2:
-        if st.button(f"🚀 SUBMIT ALL DECISIONS & ADVANCE TO R{state.round_num + 1}", type="primary", use_container_width=True):
-            if state.round_num >= 4:
-                st.error("Game already at R4. Reset to play again.")
-            else:
-                with st.spinner(f"Simulating Round {state.round_num + 1}..."):
-                    prev_state = state.model_copy(deep=True)
-                    st.session_state.prev_state_snapshot = prev_state
-                    result = advance_round(state, pending, prev_state=prev_state)
-                    st.session_state.bsc_history.append(result["bsc"])
-                    st.session_state.pending_decisions = None
-                    save_state()
-                st.success(f"Round {result['round_num']} complete! BSC: {result['bsc']['total']:.1f}")
-                st.balloons()
-                st.rerun()
 
 
 # ============================================================
@@ -2380,6 +2361,30 @@ with tab_hist:
             fig4.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=300)
             st.plotly_chart(fig4, use_container_width=True)
 
+
+# ============================================================
+# GLOBAL ADVANCE ROUND BUTTON (visible on every tab — was hidden in TQM before)
+# ============================================================
+
+st.markdown("---")
+_pending_global = ensure_pending()
+_adv_c1, _adv_c2, _adv_c3 = st.columns([1, 2, 1])
+with _adv_c2:
+    if st.button(f"🚀 SUBMIT ALL DECISIONS & ADVANCE TO R{state.round_num + 1}",
+                 type="primary", use_container_width=True, key="global_advance_btn"):
+        if state.round_num >= 4:
+            st.error("Game already at R4. Reset to play again.")
+        else:
+            with st.spinner(f"Simulating Round {state.round_num + 1}..."):
+                prev_state = state.model_copy(deep=True)
+                st.session_state.prev_state_snapshot = prev_state
+                result = advance_round(state, _pending_global, prev_state=prev_state)
+                st.session_state.bsc_history.append(result["bsc"])
+                st.session_state.pending_decisions = None
+                save_state()
+            st.success(f"Round {result['round_num']} complete! BSC: {result['bsc']['total']:.1f}")
+            st.balloons()
+            st.rerun()
 
 # ============================================================
 # FOOTER + UTILITY BAR
