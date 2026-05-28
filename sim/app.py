@@ -539,8 +539,11 @@ with _top_rewind_btn:
             else:
                 st.error("Could not find snapshot")
 with _top_info:
+    # Inline format (fmt_money not yet defined at this point in file)
+    _cash_m = andrews.cash / 1e6
+    _cash_str = f"${_cash_m:.1f}M" if abs(_cash_m) >= 1 else f"${andrews.cash/1e3:.0f}K"
     st.markdown(f"<div style='text-align:right; padding-top:8px; font-size:12px; color:#718096;'>"
-                f"Cash: <b>{fmt_money(andrews.cash)}</b> &middot; Stock: <b>${andrews.stock_price:.2f}</b> &middot; "
+                f"Cash: <b>{_cash_str}</b> &middot; Stock: <b>${andrews.stock_price:.2f}</b> &middot; "
                 f"Snapshots: <b>{len(st.session_state.get('round_snapshots', {}))}</b></div>",
                 unsafe_allow_html=True)
 st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
