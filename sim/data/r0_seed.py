@@ -22,7 +22,7 @@ SEGMENTS = [
         ideal_age=3.0, age_weight=0.10,
         mtbf_min=14000, mtbf_max=20000, mtbf_weight=0.20,
         position_weight=0.15,
-        growth_rate=0.11,
+        growth_rate=0.096,
     ),
     Segment(
         name="Core",
@@ -33,7 +33,7 @@ SEGMENTS = [
         ideal_age=2.0, age_weight=0.20,
         mtbf_min=16000, mtbf_max=22000, mtbf_weight=0.18,
         position_weight=0.16,
-        growth_rate=0.10,
+        growth_rate=0.094,
     ),
     Segment(
         name="Nano",
@@ -44,7 +44,7 @@ SEGMENTS = [
         ideal_age=1.0, age_weight=0.20,
         mtbf_min=18000, mtbf_max=24000, mtbf_weight=0.18,
         position_weight=0.35,
-        growth_rate=0.14,
+        growth_rate=0.132,
     ),
     Segment(
         name="Elite",
@@ -55,7 +55,7 @@ SEGMENTS = [
         ideal_age=0.0, age_weight=0.34,
         mtbf_min=20000, mtbf_max=26000, mtbf_weight=0.20,
         position_weight=0.22,
-        growth_rate=0.16,
+        growth_rate=0.181,
     ),
 ]
 

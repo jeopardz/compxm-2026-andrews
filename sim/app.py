@@ -788,7 +788,7 @@ with tab_dash:
 # ============================================================
 
 with tab_rd:
-    st.markdown('<div class="capsim-section-title">Research & Development — Round {} Decisions</div>'.format(state.round_num + 1), unsafe_allow_html=True)
+    st.markdown('<div class=\"capsim-section-title\">' + ('Research & Development — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Research & Development — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("Capsim rules: Age halves at revise completion. Project duration ≈ 60 days + 180×distance. Cost ≈ $1M base + position move + MTBF change. Round starts Jan 1; products age +1yr automatically if no revise completes.")
@@ -965,7 +965,7 @@ with tab_rd:
 # ============================================================
 
 with tab_mkt:
-    st.markdown('<div class="capsim-section-title">Marketing — Round {} Decisions</div>'.format(state.round_num + 1), unsafe_allow_html=True)
+    st.markdown('<div class=\"capsim-section-title\">' + ('Marketing — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Marketing — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("Promo: $1.4M maintain / $2M grow / $3M cap • Sales: $3M/product or $4.5M combined / segment")
@@ -1070,7 +1070,7 @@ with tab_mkt:
 # ============================================================
 
 with tab_prod:
-    st.markdown('<div class="capsim-section-title">Production — Round {} Decisions</div>'.format(state.round_num + 1), unsafe_allow_html=True)
+    st.markdown('<div class=\"capsim-section-title\">' + ('Production — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Production — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("Capacity in 000s units. 1 shift = 100% util, 2 shifts = 200% max. Automation 1-10 ($4/unit/level).")
@@ -1262,7 +1262,7 @@ with tab_prod:
 # ============================================================
 
 with tab_fin:
-    st.markdown('<div class="capsim-section-title">Finance — Round {} Decisions</div>'.format(state.round_num + 1), unsafe_allow_html=True)
+    st.markdown('<div class=\"capsim-section-title\">' + ('Finance — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Finance — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     col_bnd, col_stk = st.columns(2)
@@ -1413,7 +1413,7 @@ with tab_fin:
 # ============================================================
 
 with tab_hr:
-    st.markdown('<div class="capsim-section-title">Human Resources — Round {} Decisions</div>'.format(state.round_num + 1), unsafe_allow_html=True)
+    st.markdown('<div class=\"capsim-section-title\">' + ('Human Resources — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Human Resources — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("OLD Comp-XM HR module: Recruit Spend ($0-$5K) + Training Hours (0-80hr × $20). Workforce Complement set on Production page.")
@@ -1483,7 +1483,7 @@ with tab_hr:
 # ============================================================
 
 with tab_tqm:
-    st.markdown('<div class="capsim-section-title">Total Quality Management — Round {} Decisions</div>'.format(state.round_num + 1), unsafe_allow_html=True)
+    st.markdown('<div class=\"capsim-section-title\">' + ('Total Quality Management — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Total Quality Management — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("10 initiatives, $0-$2M per round each, $4M cumulative cap per initiative. S-curve response.")
