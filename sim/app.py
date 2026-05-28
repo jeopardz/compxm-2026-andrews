@@ -2370,11 +2370,11 @@ st.markdown("---")
 _pending_global = ensure_pending()
 _adv_c1, _adv_c2, _adv_c3 = st.columns([1, 2, 1])
 with _adv_c2:
-    if st.button(f"🚀 SUBMIT ALL DECISIONS & ADVANCE TO R{state.round_num + 1}",
-                 type="primary", use_container_width=True, key="global_advance_btn"):
-        if state.round_num >= 4:
-            st.error("Game already at R4. Reset to play again.")
-        else:
+    if state.round_num >= 4:
+        st.success("🏁 GAME COMPLETE — R4 finished. Check Scorecard tab for final BSC. Reset to play again.")
+    else:
+        if st.button(f"🚀 SUBMIT ALL DECISIONS & ADVANCE TO R{state.round_num + 1}",
+                     type="primary", use_container_width=True, key="global_advance_btn"):
             with st.spinner(f"Simulating Round {state.round_num + 1}..."):
                 prev_state = state.model_copy(deep=True)
                 st.session_state.prev_state_snapshot = prev_state
