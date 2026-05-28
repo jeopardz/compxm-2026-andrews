@@ -356,6 +356,140 @@ def income_statement(company: Company, year: int, prime_rate: float,
     }
 
 
+def project_next_round_pl(state, company: Company, pending) -> Dict:
+    """
+    Estimate next round's P&L based on pending decisions (BEFORE advance_round).
+
+    Used by Finance tab's Projected Cash Flow Summary to reflect HR/TQM/Marketing/
+    R&D/Price changes that user just adjusted — not stale profit_last.
+
+    pending: RoundDecision with .products, .hr, .tqm, .finance
+
+    Returns dict with sales/variable/sga/profit/cash_from_ops estimates.
+    """
+    from sim.engines.production import SECOND_SHIFT_LABOR_MULTIPLIER, annual_depreciation
+    from sim.engines.hr import productivity_index, employees_needed, recruiting_cost, training_cost, turnover_rate, BASE_TURNOVER
+    from sim.engines.tqm import TQM_IMPACTS, TQM_FULL_EFFECT_CUMULATIVE, s_curve_factor
+    from sim.engines.rd import rd_distance, rd_project_cost
+
+    # === 1. PROJECTED HR (with new pending HR decision) ===
+    new_pi = productivity_index(pending.hr.recruit_spend, pending.hr.training_hours)
+    new_turnover = turnover_rate(pending.hr.training_hours)
+
+    # Build pseudo-company with pending production_schedule to compute needed employees
+    total_prod = sum((pd.production_schedule or 0) for pd in pending.products)
+    needed_emp = max(50, int(total_prod * 0.144))
+    cur_emp = company.hr.workforce_complement
+    separated = int(cur_emp * new_turnover)
+    new_hires = max(0, needed_emp - (cur_emp - separated))
+    rec_cost = recruiting_cost(new_hires, pending.hr.recruit_spend)
+    train_cost = training_cost(needed_emp, pending.hr.training_hours)
+    hr_admin_total = rec_cost + train_cost
+
+    # === 2. PROJECTED TQM (cumulative + this round's pending spend) ===
+    proj_tqm_cum = dict(company.tqm.cumulative_spend)
+    tqm_round_spend = 0.0
+    for name, amt in (pending.tqm.initiatives or {}).items():
+        if name not in TQM_IMPACTS:
+            continue
+        amt_capped = max(0, min(amt, 2_000_000))
+        already = proj_tqm_cum.get(name, 0)
+        amt_capped = min(amt_capped, max(0, TQM_FULL_EFFECT_CUMULATIVE - already))
+        proj_tqm_cum[name] = already + amt_capped
+        tqm_round_spend += amt_capped
+
+    mat = lab = adm = 0.0
+    for name, impacts in TQM_IMPACTS.items():
+        cum = proj_tqm_cum.get(name, 0)
+        if cum <= 0:
+            continue
+        f = s_curve_factor(cum)
+        mat += impacts["material"] * f
+        lab += impacts["labor"] * f
+        adm += impacts["admin"] * f
+    proj_tqm_mat = max(-0.118, mat)
+    proj_tqm_lab = max(-0.14, lab)
+    proj_tqm_adm = max(-0.60, adm)
+
+    # === 3. PROJECTED SALES (from pending forecast or units_sold_last × growth) ===
+    proj_sales = 0.0
+    proj_var_labor = 0.0
+    proj_var_material = 0.0
+    for pd in pending.products:
+        prod = next(p for p in company.products if p.name == pd.product_name)
+        # Use forecast (000s) if set, else units_sold_last × (1+seg_growth)
+        seg = next(s for s in state.segments if s.name == prod.primary_segment)
+        forecast_units = pd.forecast or int(prod.units_sold_last * (1 + seg.growth_rate))
+        price = pd.price if pd.price is not None else prod.price
+        proj_sales += forecast_units * price * 1000
+
+        # Variable costs: labor with NEW HR PI + NEW TQM lab reduction
+        # Production = production_schedule (build to spec; unsold goes to inventory but still cost it)
+        prod_units = pd.production_schedule or forecast_units
+        base_labor = prod.labor_cost / max(0.5, new_pi) * (1 + proj_tqm_lab)
+        # NEW automation reduces labor (already baked into prod.labor_cost; auto upgrade applies post-round)
+        cap = prod.capacity_first_shift + (pd.capacity_change or 0)
+        first_shift = min(prod_units, max(1, cap))
+        second_shift = max(0, prod_units - cap)
+        proj_var_labor += (first_shift * base_labor + second_shift * base_labor * SECOND_SHIFT_LABOR_MULTIPLIER) * 1000
+        # Material: NEW TQM mat reduction
+        eff_mat = prod.material_cost * (1 + proj_tqm_mat)
+        proj_var_material += eff_mat * prod_units * 1000
+
+    # === 4. R&D COST (from pending revisions) ===
+    proj_rd_cost = 0.0
+    for pd in pending.products:
+        if pd.new_pfmn is not None or pd.new_size is not None or pd.new_mtbf is not None:
+            prod = next(p for p in company.products if p.name == pd.product_name)
+            np_pfmn = pd.new_pfmn if pd.new_pfmn is not None else prod.pfmn
+            np_size = pd.new_size if pd.new_size is not None else prod.size
+            np_mtbf = pd.new_mtbf if pd.new_mtbf is not None else prod.mtbf
+            proj_rd_cost += rd_project_cost(prod, np_pfmn, np_size, np_mtbf)
+
+    # === 5. SG&A — uses NEW HR cost, NEW TQM spend, NEW marketing ===
+    promo_total = sum((pd.promo_budget or 0) for pd in pending.products)
+    sales_total = sum((pd.sales_budget or 0) for pd in pending.products)
+    depreciation = sum(annual_depreciation(p) for p in company.products)
+    admin = proj_sales * 0.015 * (1 + proj_tqm_adm)
+    sga = proj_rd_cost + promo_total + sales_total + admin + hr_admin_total
+
+    contribution = proj_sales - proj_var_labor - proj_var_material
+    ebit = contribution - depreciation - sga - tqm_round_spend
+    st_int = company.current_debt * short_term_rate(state.prime_interest_rate)
+    lt_int = total_bond_interest(company)
+    pretax = ebit - st_int - lt_int
+    taxes = max(0, pretax * TAX_RATE)
+    after_tax = pretax - taxes
+    profit_sharing = max(0, after_tax * PROFIT_SHARING_RATE)
+    net_profit = after_tax - profit_sharing
+
+    return {
+        "sales": proj_sales,
+        "variable_labor": proj_var_labor,
+        "variable_material": proj_var_material,
+        "contribution": contribution,
+        "depreciation": depreciation,
+        "rd_cost": proj_rd_cost,
+        "promo": promo_total,
+        "sales_budget": sales_total,
+        "admin": admin,
+        "hr_admin": hr_admin_total,
+        "tqm_spend": tqm_round_spend,
+        "sga": sga,
+        "ebit": ebit,
+        "interest": st_int + lt_int,
+        "taxes": taxes,
+        "net_profit": net_profit,
+        "cash_from_operations": net_profit + depreciation,
+        # Debug breakdown for tooltip
+        "new_pi": new_pi,
+        "new_hires": new_hires,
+        "tqm_mat_pct": proj_tqm_mat * 100,
+        "tqm_lab_pct": proj_tqm_lab * 100,
+        "tqm_adm_pct": proj_tqm_adm * 100,
+    }
+
+
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()

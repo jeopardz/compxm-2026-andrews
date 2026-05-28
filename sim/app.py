@@ -1346,14 +1346,14 @@ with tab_fin:
     cf_col, lb_col = st.columns([3, 2])
     with cf_col:
         st.markdown('<div class="capsim-section-title">💵 Projected Cash Flow Summary</div>', unsafe_allow_html=True)
-        # Compute projected components
-        starting_cash = andrews.cash
-        # Operating: profit + depreciation - delta_AR - delta_Inv + delta_AP  (approximate using last round)
-        from sim.engines.production import annual_depreciation
-        depreciation = sum(annual_depreciation(p) for p in andrews.products)
-        proj_operating = andrews.profit_last + depreciation
-        # Investing: capex (capacity buy + automation upgrade)
+        # Compute projected components using FULL P&L simulation that reflects
+        # pending HR / TQM / Marketing / R&D / Price decisions
+        from sim.engines.finance import project_next_round_pl
         from sim.engines.production import capacity_purchase_cost, automation_upgrade_cost
+        starting_cash = andrews.cash
+        proj = project_next_round_pl(state, andrews, pending)
+        proj_operating = proj["cash_from_operations"]
+        # Investing: capex (capacity buy + automation upgrade)
         proj_investing = 0
         for pd_ in pending.products:
             prod = next(pp for pp in andrews.products if pp.name == pd_.product_name)
@@ -1372,13 +1372,35 @@ with tab_fin:
 
         cf_rows = pd.DataFrame([
             {"Item": "Starting Cash Position (Jan 1)", "Amount": fmt_money(starting_cash)},
-            {"Item": "Cash from Operating (profit + depr)", "Amount": fmt_money(proj_operating)},
+            {"Item": "Projected Net Profit", "Amount": fmt_money(proj['net_profit'])},
+            {"Item": "  + Depreciation (non-cash)", "Amount": fmt_money(proj['depreciation'])},
+            {"Item": "= Cash from Operating", "Amount": fmt_money(proj_operating)},
             {"Item": "Cash from Investing (capex)", "Amount": fmt_money(proj_investing)},
             {"Item": "Cash from Financing", "Amount": fmt_money(proj_financing)},
             {"Item": "Closing Cash Position (Dec 31)", "Amount": fmt_money(closing_cash)},
         ])
         st.dataframe(cf_rows, use_container_width=True, hide_index=True)
-        st.caption("⚠️ Approximate. Real round may differ based on actual sales + AR/AP changes.")
+
+        # Breakdown showing HR/TQM/Marketing impact
+        with st.expander("🔍 Projected P&L breakdown (where HR/TQM/Marketing show up)"):
+            pl_rows = pd.DataFrame([
+                {"Line": "Projected Sales (forecast × price)", "Amount": fmt_money(proj['sales'])},
+                {"Line": "− Variable Labor (HR PI " + f"{proj['new_pi']:.3f}, TQM Lab {proj['tqm_lab_pct']:+.1f}%)", "Amount": fmt_money(-proj['variable_labor'])},
+                {"Line": "− Variable Material (TQM Mat " + f"{proj['tqm_mat_pct']:+.1f}%)", "Amount": fmt_money(-proj['variable_material'])},
+                {"Line": "= Contribution Margin", "Amount": fmt_money(proj['contribution'])},
+                {"Line": "− Depreciation", "Amount": fmt_money(-proj['depreciation'])},
+                {"Line": "− R&D (from pending revisions)", "Amount": fmt_money(-proj['rd_cost'])},
+                {"Line": "− Promo + Sales Budget (Marketing)", "Amount": fmt_money(-(proj['promo'] + proj['sales_budget']))},
+                {"Line": "− Admin (TQM Adm " + f"{proj['tqm_adm_pct']:+.1f}%)", "Amount": fmt_money(-proj['admin'])},
+                {"Line": "− HR Cost (recruit " + f"${pending.hr.recruit_spend} × {proj['new_hires']} new + train)", "Amount": fmt_money(-proj['hr_admin'])},
+                {"Line": "− TQM Round Spend", "Amount": fmt_money(-proj['tqm_spend'])},
+                {"Line": "= EBIT", "Amount": fmt_money(proj['ebit'])},
+                {"Line": "− Interest", "Amount": fmt_money(-proj['interest'])},
+                {"Line": "− Tax (35%)", "Amount": fmt_money(-proj['taxes'])},
+                {"Line": "= Net Profit", "Amount": fmt_money(proj['net_profit'])},
+            ])
+            st.dataframe(pl_rows, use_container_width=True, hide_index=True)
+        st.caption("✅ NOW reflects pending HR / TQM / Marketing / R&D / Price changes. Still approximate — actual round may differ on sales realized & AR/AP changes.")
 
     with lb_col:
         st.markdown('<div class="capsim-section-title">🥧 Liabilities & Owner\'s Equity</div>', unsafe_allow_html=True)
