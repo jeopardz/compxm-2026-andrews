@@ -539,16 +539,28 @@ def seg_pill(seg_name):
 def ensure_pending():
     if (st.session_state.pending_decisions is None
             or st.session_state.pending_decisions.round_num != state.round_num + 1):
-        # Pre-populate HR from current state so it persists if user doesn't open HR tab
-        st.session_state.pending_decisions = RoundDecision(
-            round_num=state.round_num + 1,
-            products=[ProductDecision(
+        # Pre-populate sensible defaults
+        # Production Schedule = Forecast - Inventory + 5% safety buffer (Capsim playbook)
+        prod_decisions = []
+        for p in andrews.products:
+            seg = next((s for s in state.segments if s.name == p.primary_segment), None)
+            growth = seg.growth_rate if seg else 0.10
+            forecast = int(p.units_sold_last * (1 + growth))  # expected demand next year
+            # Pessimistic forecast = forecast × 0.90 (for BSC accuracy safety)
+            forecast_pess = int(forecast * 0.90)
+            # Schedule covers full forecast minus inventory, plus 5% buffer to avoid stockout
+            schedule = max(100, int((forecast - p.inventory) * 1.05))
+            prod_decisions.append(ProductDecision(
                 product_name=p.name,
                 price=p.price,
                 promo_budget=p.promo_budget,
                 sales_budget=p.sales_budget,
-                production_schedule=int(p.capacity_first_shift * 1.5),
-            ) for p in andrews.products],
+                forecast=forecast_pess,
+                production_schedule=schedule,
+            ))
+        st.session_state.pending_decisions = RoundDecision(
+            round_num=state.round_num + 1,
+            products=prod_decisions,
             hr=HRDecision(
                 recruit_spend=andrews.hr.recruit_spend or 2500,
                 training_hours=andrews.hr.training_hours or 40,
@@ -1448,13 +1460,23 @@ with tab_hr:
     with col_r:
         recruit = st.slider("Recruit Spend ($/employee above auto $1,000)",
                              min_value=0, max_value=5000, value=default_recruit, step=500,
-                             help="$0 = basic hires, $5000 = best talent")
-        st.caption(f"× {andrews.hr.workforce_complement} employees = {fmt_money(recruit * andrews.hr.workforce_complement)}/yr (incl auto $1K)")
+                             help="$0 = basic hires, $5000 = best talent. Cost = NEW HIRES × ($1000 auto + spend), NOT all employees.")
     with col_t:
         training = st.slider("Training Hours (hrs/employee/yr × $20)",
                               min_value=0, max_value=80, value=default_training, step=10,
-                              help="Up to 80hr × $20 = $1,600/employee/yr")
-        st.caption(f"× {andrews.hr.workforce_complement} employees = {fmt_money(training * 20 * andrews.hr.workforce_complement)}/yr")
+                              help="Up to 80hr × $20 = $1,600/employee/yr. Charged on ALL employees.")
+
+    # Captions computed AFTER both sliders set (so we can use both values)
+    _turnover_now = 0.10 - 0.05 * (training / 80)
+    _separated = int(andrews.hr.workforce_complement * _turnover_now)
+    _new_hires = max(0, _separated)  # at minimum replace separated
+    _rec_cost = _new_hires * (1000 + recruit)
+    _train_cost = training * 20 * andrews.hr.workforce_complement
+    with col_r:
+        st.caption(f"~{_new_hires} new hires (turnover {_turnover_now*100:.0f}% of {andrews.hr.workforce_complement}) × \\${1000 + recruit:,} = **{fmt_money(_rec_cost)}/yr**")
+    with col_t:
+        st.caption(f"{andrews.hr.workforce_complement} employees × {training}hr × \\$20 = **{fmt_money(_train_cost)}/yr**")
+    st.caption(f"💰 **Total HR Cost projected**: Recruit {fmt_money(_rec_cost)} + Training {fmt_money(_train_cost)} = **{fmt_money(_rec_cost + _train_cost)}**")
 
     pi_new = 1.0 + 0.09 * (recruit/5000) + 0.09 * (training/80)
     turnover_new = 0.10 - 0.05 * (training/80)
