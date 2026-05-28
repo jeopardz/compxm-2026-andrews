@@ -148,8 +148,11 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
         forecast = max(int(p.units_sold_last * (1 + seg_growth * 0.5)), 100)
         decision.forecast = forecast
 
-        # Production: aim for ~1.1x last sold (not 1.5x cap which way over-produces)
-        target_units = max(int(p.units_sold_last * 1.1), int(p.capacity_first_shift * 0.8))
+        # Production: use Capsim playbook formula = (forecast - inventory) × 1.05
+        # This is the SAME formula UI defaults to — avoids overproduction that
+        # was killing AI profitability via wasted material/labor + inventory carry
+        target_demand = int(p.units_sold_last * (1 + seg.growth_rate))
+        target_units = max(100, int((target_demand - p.inventory) * 1.05))
         decision.production_schedule = target_units
 
         # R&D: revise to next year's ideal if worth it (SMART-CAP: limit to reachable in 330 days)

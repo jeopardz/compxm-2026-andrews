@@ -1191,10 +1191,13 @@ with tab_prod:
         default_cap = saved_cap if saved_cap else 0
 
         with cols_r[4]:
-            new_prod = st.number_input("_pd", min_value=0, max_value=p.capacity_first_shift * 2,
+            # Effective cap = base + cap_change (so cap buy expands max input)
+            _eff_cap = p.capacity_first_shift + (saved_cap or 0)
+            _max_input = max(_eff_cap * 3, 10000)  # generous max — engine clamps at 2-shift limit anyway
+            new_prod = st.number_input("_pd", min_value=0, max_value=_max_input,
                                         value=default_prod, step=50,
                                         format="%d", label_visibility="collapsed", key=f"pd_prod_{i}",
-                                        help=f"In 000s units. Max 2×cap = {p.capacity_first_shift*2:,}. Forecast × 1.1 buffer recommended.")
+                                        help=f"In 000s units. Eff capacity {_eff_cap:,} × 2 shifts = {_eff_cap*2:,} max realistic. Forecast − Inv + 5% buffer recommended.")
         with cols_r[5]:
             new_auto = st.number_input("_au", min_value=1.0, max_value=10.0, value=default_auto,
                                         step=0.5, format="%.1f",

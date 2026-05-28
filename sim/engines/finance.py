@@ -220,15 +220,22 @@ def update_stock_price(company: Company) -> float:
     """
     Stock price update based on Book Value, EPS, Dividend.
 
-    Calibrated to match Andrews R0 ($95.38) with seed values:
-    BV/share $34.65 + EPS $9.80 + Div $6.50
-    Formula: BV + 3.0×EPS + 5.0×Div = 34.65 + 29.4 + 32.5 = $96.55 ≈ $95.38 ✓
+    Re-calibrated to be less punishing on dividend cuts (real Capsim
+    investors care more about EPS than dividend yield).
+
+    Old: BV + 3×EPS + 5×Div (heavy dividend dependence)
+    New: BV + 5×EPS + 2×Div (EPS-heavy, like real P/E investors)
+
+    Andrews R0: BV $34.65 + 5×$9.80 + 2×$6.50 = 34.65 + 49 + 13 = $96.65 ≈ $95.38 ✓
+    R2 with EPS dropped to $7.36 and div cut to $3:
+      Old: 39.02 + 22.08 + 15 = $76.10 (over-punished)
+      New: 39.02 + 36.80 + 6   = $81.82 (more realistic)
     """
     bv_per_share = (company.total_equity / company.shares_outstanding
                     if company.shares_outstanding > 0 else 0)
     eps = company.eps
     div = company.dividend_per_share
-    new_price = bv_per_share + 3.0 * eps + 5.0 * div
+    new_price = bv_per_share + 5.0 * eps + 2.0 * div
     company.stock_price = max(1.0, new_price)
     company.market_cap = company.stock_price * company.shares_outstanding
     return company.stock_price
