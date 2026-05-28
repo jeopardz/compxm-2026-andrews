@@ -397,6 +397,8 @@ def init_state():
                 loaded = GameState.model_validate(payload["game_state"])
                 st.session_state.bsc_history = payload.get("bsc_history", [])
                 st.session_state.board_results = payload.get("board_results", {})
+                # Load round snapshots (for Rewind feature)
+                st.session_state.round_snapshots = payload.get("round_snapshots", {})
                 # Load pending_decisions if present and matches current round
                 pd_payload = payload.get("pending_decisions")
                 if pd_payload:
@@ -415,6 +417,8 @@ def init_state():
         st.session_state.pending_decisions = loaded_pending
     if "prev_state_snapshot" not in st.session_state:
         st.session_state.prev_state_snapshot = None
+    if "round_snapshots" not in st.session_state:
+        st.session_state.round_snapshots = {}
 
 
 def save_state():
@@ -426,9 +430,38 @@ def save_state():
         "board_results": {str(k): v for k, v in st.session_state.board_results.items()},
         "pending_decisions": (st.session_state.pending_decisions.model_dump()
                               if st.session_state.pending_decisions else None),
+        "round_snapshots": st.session_state.get("round_snapshots", {}),
     }
     with open(SAVE_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, default=str)
+
+
+def snapshot_current_round():
+    """Save snapshot of current state BEFORE advancing — enables Rewind feature."""
+    if "round_snapshots" not in st.session_state:
+        st.session_state.round_snapshots = {}
+    rn = st.session_state.game_state.round_num
+    st.session_state.round_snapshots[str(rn)] = st.session_state.game_state.model_dump()
+
+
+def rewind_to_round(target_round: int):
+    """Restore game state to snapshot of `target_round`. Clears pending and BSC history past that point."""
+    snapshots = st.session_state.get("round_snapshots", {})
+    if str(target_round) not in snapshots:
+        return False
+    restored = GameState.model_validate(snapshots[str(target_round)])
+    st.session_state.game_state = restored
+    # Clear BSC history past target round
+    st.session_state.bsc_history = st.session_state.bsc_history[:target_round]
+    # Clear pending decisions (they were for the next round)
+    st.session_state.pending_decisions = None
+    st.session_state.prev_state_snapshot = None
+    # Remove later snapshots (since we're rewinding past them)
+    st.session_state.round_snapshots = {
+        k: v for k, v in snapshots.items() if int(k) <= target_round
+    }
+    save_state()
+    return True
 
 
 def autosave():
@@ -445,6 +478,7 @@ def reset_state():
     st.session_state.board_results = {}
     st.session_state.pending_decisions = None
     st.session_state.prev_state_snapshot = None
+    st.session_state.round_snapshots = {}
     if SAVE_PATH.exists():
         SAVE_PATH.unlink()
 
@@ -470,6 +504,46 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ============================================================
+# STICKY TOP BAR — Save / Rewind (visible on every tab)
+# ============================================================
+_top_save, _top_rewind, _top_rewind_btn, _top_info = st.columns([1, 2, 1, 4])
+with _top_save:
+    if st.button("💾 Save", key="top_save", help="Save current decisions to disk", use_container_width=True):
+        save_state()
+        st.toast("✅ Saved!", icon="💾")
+with _top_rewind:
+    _snapshots = st.session_state.get("round_snapshots", {})
+    if _snapshots:
+        _available_rounds = sorted([int(k) for k in _snapshots.keys()])
+        # Label = "redo R{X+1}" — i.e. snapshot at start of round X+1 decisions
+        _rewind_options = ["(no rewind)"] + [f"Redo R{r+1} decisions" for r in _available_rounds]
+        _rewind_choice = st.selectbox("🔙 Rewind:", _rewind_options, key="top_rewind_select",
+                                       label_visibility="collapsed",
+                                       help="Restore game to before a round's decisions, so you can re-try with different choices")
+    else:
+        st.selectbox("🔙 Rewind:", ["(advance a round first to enable rewind)"], disabled=True,
+                     key="top_rewind_select", label_visibility="collapsed")
+        _rewind_choice = "(no rewind)"
+with _top_rewind_btn:
+    if _rewind_choice and _rewind_choice != "(no rewind)" and "Redo R" in _rewind_choice:
+        # Extract round number from "Redo R{X+1} decisions"
+        _target_decision_round = int(_rewind_choice.replace("Redo R", "").split()[0])
+        _target_snapshot_round = _target_decision_round - 1
+        if st.button("⏮ Restore", key="top_rewind_btn", type="secondary", use_container_width=True,
+                     help=f"Restore state to before R{_target_decision_round} decisions"):
+            if rewind_to_round(_target_snapshot_round):
+                st.toast(f"⏮ Rewound — ready to redo R{_target_decision_round}", icon="🔙")
+                st.rerun()
+            else:
+                st.error("Could not find snapshot")
+with _top_info:
+    st.markdown(f"<div style='text-align:right; padding-top:8px; font-size:12px; color:#718096;'>"
+                f"Cash: <b>{fmt_money(andrews.cash)}</b> &middot; Stock: <b>${andrews.stock_price:.2f}</b> &middot; "
+                f"Snapshots: <b>{len(st.session_state.get('round_snapshots', {}))}</b></div>",
+                unsafe_allow_html=True)
+st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -2422,6 +2496,8 @@ with _adv_c2:
             with st.spinner(f"Simulating Round {state.round_num + 1}..."):
                 prev_state = state.model_copy(deep=True)
                 st.session_state.prev_state_snapshot = prev_state
+                # Save snapshot BEFORE advancing so user can rewind to this round
+                snapshot_current_round()
                 result = advance_round(state, _pending_global, prev_state=prev_state)
                 st.session_state.bsc_history.append(result["bsc"])
                 st.session_state.pending_decisions = None
