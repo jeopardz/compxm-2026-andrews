@@ -66,14 +66,22 @@ def predicted_ideal_at_round(seg: Segment, rounds_ahead: int) -> tuple[float, fl
 
 
 def pricing_for_product(product: Product, segment: Segment, strategy: str) -> float:
-    """Determine new price for AI competitor."""
+    """Determine new price for AI competitor.
+
+    Conservative: adjust around CURRENT price, not jump to absolute floor/ceiling.
+    Capsim demand elasticity doesn't boost volume enough to cover deep price cuts —
+    Chester would tank if it dropped Thrift $19 → $15 (-$5M revenue per product).
+    """
     p_min = segment.price_min
     p_max = segment.price_max
+    cur = product.price
     if strategy == "premium":
-        return p_max - 1.0
+        # Inch toward upper-mid: cur + $0.50, capped just below max
+        return min(p_max - 0.50, max(cur, (p_min + p_max) / 2 + 2.0))
     if strategy == "low":
-        return p_min + 1.0
-    return (p_min + p_max) / 2
+        # Inch toward lower-mid: cur - $0.50, never below mid - $4
+        return max(p_min + 2.0, min(cur, (p_min + p_max) / 2 - 1.0))
+    return max(p_min + 1.0, min(p_max - 1.0, (p_min + p_max) / 2))
 
 
 def should_revise(product: Product, segment: Segment, aggressiveness: str,
@@ -102,10 +110,26 @@ def digby_decisions(state: GameState) -> RoundDecision:
 
 
 def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
-    """Generate full round decisions for an AI competitor."""
+    """Generate full round decisions for an AI competitor.
+
+    Affordability-aware: scales discretionary spend (marketing, TQM, automation,
+    bond retirement) down when cash is tight so AIs don't crash to emergency loans
+    in R1. Previously Chester spent $16M on automation + $11M bond + $8M marketing
+    on $32M cash → bankrupt. Same for Baldwin ($19M cash).
+    """
+    from sim.engines.production import automation_upgrade_cost
     company = state.get_company(company_name)
     profile = STRATEGY_PROFILES[company_name]
     round_num = state.round_num + 1
+
+    # ---- Affordability budget ----
+    # Cash available for discretionary spend = current cash - safety reserve.
+    # Keep ~15% of last sales as buffer for working capital changes (AR/AP/inv).
+    safety_reserve = max(5_000_000, company.sales_last * 0.10)
+    available_cash = max(0, company.cash - safety_reserve)
+    # Scale factor: 1.0 if plenty of cash, down to 0.3 if cash is tight
+    cash_health = min(1.0, available_cash / 25_000_000)
+    cash_health = max(0.3, cash_health)
 
     product_decisions = []
     for p in company.products:
@@ -115,17 +139,17 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
         # Pricing
         decision.price = pricing_for_product(p, seg, profile["price_strategy"])
 
-        # Marketing
-        decision.promo_budget = profile["promo_budget_per_product"]
-        decision.sales_budget = profile["sales_budget_per_product"]
+        # Marketing — scale down if cash tight
+        decision.promo_budget = int(profile["promo_budget_per_product"] * cash_health)
+        decision.sales_budget = int(profile["sales_budget_per_product"] * cash_health)
 
         # Sales Forecast: predict based on last year + segment growth
         seg_growth = seg.growth_rate
         forecast = max(int(p.units_sold_last * (1 + seg_growth * 0.5)), 100)
         decision.forecast = forecast
 
-        # Production: aim for 1.5x capacity (use 2nd shift)
-        target_units = int(p.capacity_first_shift * 1.5)
+        # Production: aim for ~1.1x last sold (not 1.5x cap which way over-produces)
+        target_units = max(int(p.units_sold_last * 1.1), int(p.capacity_first_shift * 0.8))
         decision.production_schedule = target_units
 
         # R&D: revise to next year's ideal if worth it (SMART-CAP: limit to reachable in 330 days)
@@ -147,10 +171,14 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
             target_mtbf = min(seg.mtbf_max, p.mtbf + 1000)
             decision.new_mtbf = target_mtbf
 
-        # Automation upgrade (slow, +1 level if below target)
+        # Automation upgrade — only if affordable. Cost = cap_units * $4M/level
         target_auto = profile["automation_target"].get(p.primary_segment, 5)
         if p.automation < target_auto:
-            decision.new_automation = min(p.automation + 1.0, target_auto)
+            est_cost = automation_upgrade_cost(p.capacity_first_shift, p.automation, p.automation + 1.0)
+            # Only upgrade if cost < 30% of available_cash (one product at a time)
+            if est_cost < available_cash * 0.30:
+                decision.new_automation = min(p.automation + 1.0, target_auto)
+                available_cash -= est_cost  # decrement so next product can't also upgrade
 
         product_decisions.append(decision)
 
@@ -160,39 +188,40 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
                      if company.shares_outstanding > 0 else 0)
     finance = FinanceDecision(dividend_per_share=round(div_per_share, 2))
 
-    # Retire 13.5S2027 (high coupon, near maturity) if cash allows
+    # Retire 13.5S2027 ONLY if plenty of cash (was $15M threshold = too aggressive)
     bonds_2027 = [b for b in company.bonds if b.year_due == 2027]
-    if bonds_2027 and company.cash > 15_000_000:
-        finance.retire_bond_early = [b.series for b in bonds_2027]
+    if bonds_2027:
+        bond_face = sum(b.face_value for b in bonds_2027)
+        # Need 2x bond face to safely retire (1.5% fee + need cash for ops)
+        if company.cash > bond_face * 2.5:
+            finance.retire_bond_early = [b.series for b in bonds_2027]
 
-    # HR
+    # HR — scale recruit spend down if cash tight (training is cheap, keep full)
     hr = HRDecision(
-        recruit_spend=profile["hr_recruit"],
+        recruit_spend=int(profile["hr_recruit"] * cash_health),
         training_hours=profile["hr_training"],
     )
 
-    # TQM: allocate across top 4-6 initiatives
-    tqm_total = profile["tqm_spend_per_round"]
+    # TQM: scale entire budget by cash_health
+    tqm_total = profile["tqm_spend_per_round"] * cash_health
+    per_init_cap = 1_500_000  # $1.5M cap per initiative per round
     if round_num <= 2:
-        # Heavy investment first 2 rounds
         tqm = TQMDecision(initiatives={
-            "QFD Effort": min(1_500_000, tqm_total * 0.25),
-            "CCE/6 Sigma": min(1_500_000, tqm_total * 0.25),
-            "Vendor/JIT": min(1_500_000, tqm_total * 0.20),
-            "CPI Systems": min(1_500_000, tqm_total * 0.15),
-            "Concurrent Engineering": min(1_500_000, tqm_total * 0.15),
+            "QFD Effort": min(per_init_cap, tqm_total * 0.25),
+            "CCE/6 Sigma": min(per_init_cap, tqm_total * 0.25),
+            "Vendor/JIT": min(per_init_cap, tqm_total * 0.20),
+            "CPI Systems": min(per_init_cap, tqm_total * 0.15),
+            "Concurrent Engineering": min(per_init_cap, tqm_total * 0.15),
         })
     elif round_num == 3:
-        # Maintenance
         tqm = TQMDecision(initiatives={
-            "QFD Effort": 1_000_000,
-            "CCE/6 Sigma": 1_000_000,
-            "Channel Support Systems": 1_000_000,
-            "Benchmarking": 1_000_000,
+            "QFD Effort": min(per_init_cap, tqm_total * 0.30),
+            "CCE/6 Sigma": min(per_init_cap, tqm_total * 0.30),
+            "Channel Support Systems": min(per_init_cap, tqm_total * 0.20),
+            "Benchmarking": min(per_init_cap, tqm_total * 0.20),
         })
     else:  # round 4
-        # Minimal: just QFD
-        tqm = TQMDecision(initiatives={"QFD Effort": 1_500_000})
+        tqm = TQMDecision(initiatives={"QFD Effort": min(per_init_cap, tqm_total * 0.5)})
 
     return RoundDecision(
         round_num=round_num,
