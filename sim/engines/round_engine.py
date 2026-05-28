@@ -62,12 +62,19 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
         if not p:
             continue
 
-        # R&D revise
-        if (pdec.new_pfmn is not None and pdec.new_size is not None
-                and pdec.new_mtbf is not None):
-            cost = rd_project_cost(p, pdec.new_pfmn, pdec.new_size, pdec.new_mtbf)
+        # R&D revise — fire if ANY field changed (pfmn / size / mtbf).
+        # Fill missing fields with current product values so a partial change
+        # (e.g., just pfmn) still applies the revise. Previously, leaving MTBF
+        # at default (= current) made new_mtbf=None which skipped the entire
+        # revise — pfmn/size changes were silently discarded.
+        if (pdec.new_pfmn is not None or pdec.new_size is not None
+                or pdec.new_mtbf is not None):
+            tgt_pfmn = pdec.new_pfmn if pdec.new_pfmn is not None else p.pfmn
+            tgt_size = pdec.new_size if pdec.new_size is not None else p.size
+            tgt_mtbf = pdec.new_mtbf if pdec.new_mtbf is not None else p.mtbf
+            cost = rd_project_cost(p, tgt_pfmn, tgt_size, tgt_mtbf)
             rd_total_cost += cost
-            apply_revise(p, pdec.new_pfmn, pdec.new_size, pdec.new_mtbf,
+            apply_revise(p, tgt_pfmn, tgt_size, tgt_mtbf,
                          round_start_date=round_start,
                          rd_cycle_reduction=-rd_cycle_reduction)  # TQM reduction is negative
 
