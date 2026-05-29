@@ -54,6 +54,13 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
     capacity_buy_cost = 0.0
     capacity_sell_proceeds = 0.0
     round_start = f"{state.year + 1}-01-01"
+
+    # Apply HR + TQM FIRST so THIS round's TQM benefits (incl. the R&D cycle-time
+    # reduction read just below) and HR productivity affect this round's R&D /
+    # production / costs — not next round's. (Was applied after the product loop,
+    # so this round's TQM investment didn't speed up this round's R&D revise.)
+    hr_result = update_hr(company, decisions.hr.recruit_spend, decisions.hr.training_hours)
+    tqm_result = update_tqm(company, decisions.tqm.initiatives)
     rd_cycle_reduction = company.tqm.rd_cycle_time_reduction
 
     # Per-product decisions
@@ -140,13 +147,7 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
 
     # NOTE: Accessibility update is now done ONCE in advance_round() after all companies
     # apply decisions (avoids 4x decay bug). Per-company sales_budget already set on products
-    # via the loop above.
-
-    # HR
-    hr_result = update_hr(company, decisions.hr.recruit_spend, decisions.hr.training_hours)
-
-    # TQM
-    tqm_result = update_tqm(company, decisions.tqm.initiatives)
+    # via the loop above. HR + TQM were already applied at the top of this function.
 
     # Finance: bonds & stock first
     bond_issue_proceeds = 0.0
