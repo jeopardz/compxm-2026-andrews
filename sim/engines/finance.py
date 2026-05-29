@@ -22,8 +22,9 @@ from sim.engines.production import plant_value, annual_depreciation, inventory_c
 
 
 # Constants
-TAX_RATE = 0.35
-PROFIT_SHARING_RATE = 0.01      # 1% of net profit
+TAX_RATE = 0.35                 # 35% of pre-tax income (verified: all 4 cos in 2026 Inquirer = 35.0%)
+PROFIT_SHARING_RATE = 0.02      # 2.0% of AFTER-TAX profit (back-calc from real 2026 Inquirer: 410/20511,
+                                #   226/11280, 152/7611, 208/10413 all = 2.0%). NOT 1%, NOT 15%.
 BOND_BROKERAGE_FEE = 0.05       # 5% on issuance
 BOND_NEW_SPREAD = 0.014         # +1.4% over current rate
 BOND_TERM_YEARS = 10
