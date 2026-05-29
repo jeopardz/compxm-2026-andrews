@@ -31,17 +31,25 @@ def price_score(price: float, seg: Segment) -> float:
     """
     Score 0-100 based on price within segment's expected range.
     Customers prefer the LOW end of the price range.
-    Outside range → 0.
+
+    Capsim rules (Comp-XM 2026):
+      - Price AT or BELOW the range floor = MAX appeal (100). Customers love a
+        cheap product; you just sacrifice margin (handled in the income statement).
+        It does NOT zero demand.
+      - Within range: linear taper from 100 (at min) down to 10 (at max).
+      - ABOVE the range max: each $1 over costs ~16.7% of appeal; ~$6 over = 0.
     """
-    if price < seg.price_min or price > seg.price_max:
-        return 0.0
-    # Score 100 at min, decreasing linearly to ~0 at max
     range_size = seg.price_max - seg.price_min
     if range_size <= 0:
         return 50.0
-    # Linear: best (100) at min, worst (~10) at max
-    normalized = (price - seg.price_min) / range_size  # 0 at min, 1 at max
-    return 100.0 * (1.0 - normalized * 0.9)
+    if price <= seg.price_min:
+        return 100.0  # at/below floor = best price appeal (margin suffers, not demand)
+    if price <= seg.price_max:
+        normalized = (price - seg.price_min) / range_size  # 0 at min, 1 at max
+        return 100.0 * (1.0 - normalized * 0.9)            # 100 → 10 across the range
+    # Above max: continue down from 10 toward 0 over ~$6 (Capsim "-16.7%/$1, $6=0")
+    over = price - seg.price_max
+    return max(0.0, 10.0 - over * (10.0 / 6.0))
 
 
 def age_score(age: float, seg: Segment) -> float:
@@ -85,13 +93,22 @@ def position_distance(product: Product, seg: Segment) -> float:
 def position_score(product: Product, seg: Segment) -> float:
     """
     Score 0-100 based on distance from segment's ideal spot.
-    Within FINE_CUT_RADIUS → linear 100 (at ideal) to 0 (at radius).
-    Outside fine-cut → 0.
+
+    Capsim's positioning attractiveness falls off GRADUALLY across the rough-cut
+    circle, not as a hard cliff. We give full marks (100) right at the ideal spot,
+    a strong score inside the fine-cut circle, and a gentle taper out to the
+    rough-cut radius (instead of slamming to 0 at 2.5). This avoids the bimodal
+    "off-a-cliff" behavior that wiped out demand for products only slightly stale,
+    especially in Nano/Elite where position is the heaviest-weighted criterion.
     """
     d = position_distance(product, seg)
-    if d >= FINE_CUT_RADIUS:
+    if d <= FINE_CUT_RADIUS:
+        # Inside the customer's preferred circle: 100 at ideal → 40 at fine-cut edge
+        return 100.0 - 60.0 * (d / FINE_CUT_RADIUS)
+    if d >= ROUGH_CUT_RADIUS:
         return 0.0
-    return 100.0 * (1.0 - d / FINE_CUT_RADIUS)
+    # Between fine and rough cut: taper 40 → 0
+    return 40.0 * (1.0 - (d - FINE_CUT_RADIUS) / (ROUGH_CUT_RADIUS - FINE_CUT_RADIUS))
 
 
 def in_rough_cut(product: Product, seg: Segment) -> bool:
@@ -108,14 +125,18 @@ def weighted_score(product: Product, seg: Segment) -> float:
 
     HARD CUTOFFS (return 0 entirely, product cannot compete in this segment):
       - Outside rough-cut circle (too far from segment center)
-      - Price outside segment expected range (Capsim: customers won't buy)
+      - Priced MORE than ~$6 ABOVE the segment max (Capsim: no demand that high)
+
+    NOTE: Pricing BELOW the floor is NOT a cutoff — customers still buy (price_score
+    returns max appeal); you only lose margin. Removing the old below-floor cutoff
+    fixes the bug where e.g. Attic at $13 (below Thrift's $14 floor) sold 0 units.
 
     Otherwise: weighted sum of 4 criteria (Price + Age + MTBF + Position).
     """
     if not in_rough_cut(product, seg):
         return 0.0
-    # Capsim hard rule: price out of range = product excluded from segment
-    if product.price < seg.price_min or product.price > seg.price_max:
+    # Capsim: only EXTREME overpricing (>~$6 above max) zeroes demand.
+    if product.price > seg.price_max + 6.0:
         return 0.0
     ps = price_score(product.price, seg) * seg.price_weight
     as_ = age_score(product.age, seg) * seg.age_weight

@@ -437,26 +437,47 @@ def save_state():
 
 
 def snapshot_current_round():
-    """Save snapshot of current state BEFORE advancing — enables Rewind feature."""
+    """Save snapshot of current state AND the decisions about to be applied, BEFORE
+    advancing — enables Rewind that restores your exact settings for that round."""
     if "round_snapshots" not in st.session_state:
         st.session_state.round_snapshots = {}
     rn = st.session_state.game_state.round_num
-    st.session_state.round_snapshots[str(rn)] = st.session_state.game_state.model_dump()
+    st.session_state.round_snapshots[str(rn)] = {
+        "state": st.session_state.game_state.model_dump(),
+        "pending": (st.session_state.pending_decisions.model_dump()
+                    if st.session_state.pending_decisions else None),
+    }
 
 
 def rewind_to_round(target_round: int):
-    """Restore game state to snapshot of `target_round`. Clears pending and BSC history past that point."""
+    """Restore game state to the snapshot taken at the start of `target_round`'s
+    advance, AND restore the exact decisions that were submitted for the round after
+    it — so the user lands back on their settings and can tweak + re-advance."""
     snapshots = st.session_state.get("round_snapshots", {})
     if str(target_round) not in snapshots:
         return False
-    restored = GameState.model_validate(snapshots[str(target_round)])
+    snap = snapshots[str(target_round)]
+    # Support both new {state, pending} and legacy (raw state dump) formats
+    if isinstance(snap, dict) and "state" in snap:
+        restored = GameState.model_validate(snap["state"])
+        pending_dump = snap.get("pending")
+    else:
+        restored = GameState.model_validate(snap)
+        pending_dump = None
     st.session_state.game_state = restored
     # Clear BSC history past target round
     st.session_state.bsc_history = st.session_state.bsc_history[:target_round]
-    # Clear pending decisions (they were for the next round)
-    st.session_state.pending_decisions = None
+    # RESTORE the decisions that were submitted for the round after target_round,
+    # so all R&D / Marketing / Production / Finance / HR / TQM settings reappear.
+    if pending_dump:
+        try:
+            st.session_state.pending_decisions = RoundDecision.model_validate(pending_dump)
+        except Exception:
+            st.session_state.pending_decisions = None
+    else:
+        st.session_state.pending_decisions = None
     st.session_state.prev_state_snapshot = None
-    # Remove later snapshots (since we're rewinding past them)
+    # Remove later snapshots (we're rewriting the future timeline)
     st.session_state.round_snapshots = {
         k: v for k, v in snapshots.items() if int(k) <= target_round
     }

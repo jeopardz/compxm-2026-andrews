@@ -29,10 +29,19 @@ class TestPriceScore:
         # Score at min price is 100
         assert price_score(thrift.price_min, thrift) == pytest.approx(100.0, abs=0.01)
 
-    def test_price_outside_range_zero(self, state):
+    def test_price_below_floor_is_max(self, state):
+        # Capsim: pricing AT or BELOW the floor = max price appeal (you lose margin,
+        # not demand). Previously this wrongly returned 0 (Attic-at-$13 bug).
         thrift = state.get_segment("Thrift")  # range 14-26
-        assert price_score(13.99, thrift) == 0.0
-        assert price_score(26.01, thrift) == 0.0
+        assert price_score(13.99, thrift) == pytest.approx(100.0)
+        assert price_score(10.0, thrift) == pytest.approx(100.0)
+
+    def test_price_above_max_tapers_to_zero(self, state):
+        # Just over max keeps a little appeal; ~$6 over = 0 demand.
+        thrift = state.get_segment("Thrift")  # range 14-26
+        assert price_score(26.01, thrift) < 10.0
+        assert price_score(26.01, thrift) > 0.0
+        assert price_score(32.01, thrift) == 0.0  # >$6 above max
 
     def test_price_at_max_lowest(self, state):
         thrift = state.get_segment("Thrift")
@@ -78,11 +87,16 @@ class TestPositionAndRoughCut:
         attic.size = thrift.ideal_size
         assert position_score(attic, thrift) == pytest.approx(100.0)
 
-    def test_position_outside_fine_cut_zero(self, state):
+    def test_position_tapers_not_cliff(self, state):
+        # Capsim: position falls off gradually, not a hard cliff at the fine-cut edge.
         thrift = state.get_segment("Thrift")
         attic = state.get_company("Andrews").products[0]
-        attic.pfmn = thrift.ideal_pfmn + FINE_CUT_RADIUS + 0.1
         attic.size = thrift.ideal_size
+        # At fine-cut edge: partial score (not 0), at ROUGH-cut edge: 0
+        from sim.engines.customer_score import ROUGH_CUT_RADIUS
+        attic.pfmn = thrift.ideal_pfmn + FINE_CUT_RADIUS
+        assert position_score(attic, thrift) == pytest.approx(40.0, abs=0.01)
+        attic.pfmn = thrift.ideal_pfmn + ROUGH_CUT_RADIUS + 0.1
         assert position_score(attic, thrift) == 0.0
 
     def test_rough_cut_membership(self, state):

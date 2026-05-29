@@ -206,8 +206,11 @@ def pay_dividend(company: Company, per_share: float) -> float:
 
 
 def emergency_loan_if_needed(company: Company, prime_rate: float) -> float:
-    """If cash < 0, take emergency loan at penalty rate."""
+    """If cash < 0, take emergency loan at penalty rate.
+    Reflects ONLY this round's draw — reset to 0 when not needed so the flag
+    doesn't stick on the balance sheet/UI after the company recovers."""
     if company.cash >= 0:
+        company.emergency_loan = 0
         return 0
     loan = -company.cash
     company.cash = 0

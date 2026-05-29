@@ -255,11 +255,16 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
     spend_andrews = apply_company_decisions(andrews, andrews_decisions, state, state.companies)
     summary["decisions_applied"]["Andrews"] = spend_andrews
 
+    # Track each company's decision so the financials step can honor its own
+    # finance choices (dividend, AR/AP lag, current-debt borrow) — not just Andrews'.
+    decisions_by_company = {"Andrews": andrews_decisions}
+
     # 2. Generate + apply AI decisions
     for ai_name, gen_fn in [("Baldwin", baldwin_decisions),
                               ("Chester", chester_decisions),
                               ("Digby", digby_decisions)]:
         ai_decs = gen_fn(state)
+        decisions_by_company[ai_name] = ai_decs
         spend = apply_company_decisions(state.get_company(ai_name), ai_decs, state, state.companies)
         summary["decisions_applied"][ai_name] = spend
 
@@ -273,7 +278,27 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
                     sales_per_product[pp.name] = pp.sales_budget
         update_accessibility(state.companies, seg.name, sales_per_product)
 
-    # 3. Produce + sell (uses current product positions, prices, etc.)
+    # 2.7 Advance market + products to END-OF-YEAR *before* scoring/selling.
+    # CAPSIM TIMING FIX (was off-by-one): the December customer survey is scored
+    # against the year's ENDING segment positions, and a product revised this year
+    # sells at its NEW position for the rest of the year. So we must:
+    #   (a) grow industry demand to this year's level,
+    #   (b) drift segment centers to this year's end position,
+    #   (c) finalize completed R&D revisions (position/MTBF/age-halve) and age the rest,
+    # ALL before produce_and_sell. Previously these ran AFTER the sale, so revising
+    # toward a round's ideal spot only paid off the FOLLOWING round (contradicting the
+    # cheatsheet strategy) and segments were scored at last year's location.
+    state.industry_unit_demand = grow_industry_demand(state)
+    drift_segments(state)
+    _ys = f"{state.year + 1}-01-01"
+    _ye = f"{state.year + 1}-12-31"
+    for _c in state.companies:
+        for _p in _c.products:
+            if not end_of_year_apply_completed_projects(_p, _ye, _ys):
+                advance_age_one_year(_p)
+        retire_matured_bonds(_c, state.year + 1)
+
+    # 3. Produce + sell (now scored at end-of-year segment + product positions)
     prod_summary = produce_and_sell(state)
     summary["production_summary"] = prod_summary
 
@@ -298,15 +323,10 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
                                    hr_admin_cost=hr_admin, tqm_spend=tqm_round_spend,
                                    rd_cost=rd_spent)
         # Cash flow: cash already updated by various functions
-        # Pay dividend
-        if c.name == "Andrews":
-            div = andrews_decisions.finance.dividend_per_share
-        else:
-            # AI dividends
-            from sim.ai_competitors import STRATEGY_PROFILES
-            profile = STRATEGY_PROFILES.get(c.name, {})
-            div_ratio = profile.get("dividend_ratio", 0.40)
-            div = (c.profit_last * div_ratio) / c.shares_outstanding if c.shares_outstanding > 0 else 0
+        # Pay dividend — honor each company's own decision (AI sets it in ai_competitors
+        # from prior-year profit, like a real board declaring before results are known).
+        dec_fin = decisions_by_company[c.name].finance
+        div = dec_fin.dividend_per_share
         c.dividend_per_share = round(div, 2)
         if div > 0:
             pay_dividend(c, div)
@@ -325,9 +345,9 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
             p.inventory * (p.material_cost + p.labor_cost / max(0.5, c.hr.productivity_index)) * 1000
             for p in c.products
         )
-        # AR/AP lag — use Andrews' decision values (default 30 days each)
-        ar_lag = andrews_decisions.finance.accounts_receivable_lag if c.name == "Andrews" else 30
-        ap_lag = andrews_decisions.finance.accounts_payable_lag if c.name == "Andrews" else 30
+        # AR/AP lag — each company's own policy (AI defaults to 30 days)
+        ar_lag = dec_fin.accounts_receivable_lag
+        ap_lag = dec_fin.accounts_payable_lag
         new_ar = c.sales_last * ar_lag / 365
         new_ap = (sum(p.material_cost * p.units_produced_last for p in c.products) * 1000) * ap_lag / 365
 
@@ -341,7 +361,7 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         # Then re-borrow if user requested new current_debt_borrow
         repay = c.current_debt
         c.cash -= repay  # pay off prior current debt
-        new_borrow = (andrews_decisions.finance.current_debt_borrow if c.name == "Andrews" else 0)
+        new_borrow = dec_fin.current_debt_borrow  # honor each company's borrow decision
         c.current_debt = new_borrow
         c.cash += new_borrow
 
@@ -364,13 +384,8 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
 
         summary["financials"][c.name] = is_dict
 
-    # 5. Year-end: advance age, complete R&D, mature bonds
-    year_end_advance(state)
-
-    # 6. Drift segments + grow demand (sets up for NEXT round)
-    next_demand = grow_industry_demand(state)
-    drift_segments(state)
-    state.industry_unit_demand = next_demand
+    # 5. (Market advance, R&D completion, aging, and bond maturity already happened
+    #     in step 2.7 — before the sale — per the Capsim timing fix.)
     state.round_num += 1
     state.year += 1
 

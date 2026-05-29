@@ -22,7 +22,7 @@ SEGMENTS = [
         ideal_age=3.0, age_weight=0.10,
         mtbf_min=14000, mtbf_max=20000, mtbf_weight=0.20,
         position_weight=0.15,
-        growth_rate=0.096,
+        growth_rate=0.11,   # Industry Conditions Report Table 4: Thrift 11.0%
     ),
     Segment(
         name="Core",
@@ -33,7 +33,7 @@ SEGMENTS = [
         ideal_age=2.0, age_weight=0.20,
         mtbf_min=16000, mtbf_max=22000, mtbf_weight=0.18,
         position_weight=0.16,
-        growth_rate=0.094,
+        growth_rate=0.10,   # Industry Conditions Report Table 4: Core 10.0%
     ),
     Segment(
         name="Nano",
@@ -44,7 +44,7 @@ SEGMENTS = [
         ideal_age=1.0, age_weight=0.20,
         mtbf_min=18000, mtbf_max=24000, mtbf_weight=0.18,
         position_weight=0.35,
-        growth_rate=0.132,
+        growth_rate=0.14,   # Industry Conditions Report Table 4: Nano 14.0%
     ),
     Segment(
         name="Elite",
@@ -55,7 +55,7 @@ SEGMENTS = [
         ideal_age=0.0, age_weight=0.34,
         mtbf_min=20000, mtbf_max=26000, mtbf_weight=0.20,
         position_weight=0.22,
-        growth_rate=0.181,
+        growth_rate=0.16,   # Industry Conditions Report Table 4: Elite 16.0%
     ),
 ]
 
@@ -70,11 +70,11 @@ ANDREWS_PRODUCTS = [
         name="Attic", company="Andrews", primary_segment="Thrift",
         pfmn=4.9, size=15.1, mtbf=20000,
         revision_date="2023-04-13", age=5.1,
-        price=26.00, promo_budget=1050000, sales_budget=600000,
+        price=26.00, promo_budget=1200000, sales_budget=2000000,
         automation=6.0, capacity_first_shift=1130,
-        inventory=761, units_sold_last=1368, units_produced_last=1100,
+        inventory=761, units_sold_last=1368, units_produced_last=2124,
         material_cost=8.13, labor_cost=7.90,
-        awareness=0.62, accessibility={"Thrift": 0.74},
+        awareness=0.79, accessibility={"Thrift": 0.74},  # Inquirer p5: aware 79%, access 74%
     ),
     Product(
         name="Axe", company="Andrews", primary_segment="Core",

@@ -51,7 +51,7 @@ STRATEGY_PROFILES = {
         "price_strategy": "mid",
         "hr_recruit": 5000,
         "hr_training": 80,                # max HR
-        "tqm_spend_per_round": 7_000_000,
+        "tqm_spend_per_round": 5_000_000,  # was 7M — over-committed R1 cash with 4 products
         "revise_aggressiveness": "medium",
         "dividend_ratio": 0.40,
     },
@@ -68,33 +68,42 @@ def predicted_ideal_at_round(seg: Segment, rounds_ahead: int) -> tuple[float, fl
 def pricing_for_product(product: Product, segment: Segment, strategy: str) -> float:
     """Determine new price for AI competitor.
 
-    Conservative: adjust around CURRENT price, not jump to absolute floor/ceiling.
-    Capsim demand elasticity doesn't boost volume enough to cover deep price cuts —
-    Chester would tank if it dropped Thrift $19 → $15 (-$5M revenue per product).
+    Strategy-driven but margin-safe: a low-cost leader prices near the floor (only
+    as low as keeps a ~$5 unit margin), a differentiator holds the top of the range.
+    Never prices so low that contribution margin collapses, nor above the range max.
     """
     p_min = segment.price_min
     p_max = segment.price_max
-    cur = product.price
+    mid = (p_min + p_max) / 2
+    unit_cost = product.material_cost + product.labor_cost
+    margin_floor = unit_cost + 5.0   # keep at least ~$5/unit contribution
     if strategy == "premium":
-        # Inch toward upper-mid: cur + $0.50, capped just below max
-        return min(p_max - 0.50, max(cur, (p_min + p_max) / 2 + 2.0))
+        # Hold the high end (differentiation justifies it)
+        return round(min(p_max - 1.0, max(mid + 2.0, product.price - 1.0)), 2)
     if strategy == "low":
-        # Inch toward lower-mid: cur - $0.50, never below mid - $4
-        return max(p_min + 2.0, min(cur, (p_min + p_max) / 2 - 1.0))
-    return max(p_min + 1.0, min(p_max - 1.0, (p_min + p_max) / 2))
+        # Price near the floor but never below margin_floor (cost leader advantage)
+        return round(max(p_min + 1.0, margin_floor, mid - 4.0), 2)
+    # mid / broad
+    return round(max(margin_floor, min(p_max - 1.0, mid)), 2)
 
 
 def should_revise(product: Product, segment: Segment, aggressiveness: str,
                    round_num: int) -> bool:
-    """Decide whether to revise a product this round."""
-    # Always revise if very old or far from ideal
+    """Decide whether to revise a product this round.
+
+    Segment-aware: revise when age exceeds the segment's IDEAL age by a tolerance,
+    or position drifts too far. Nano/Elite (ideal age 1.0/0.0, heavy age weight)
+    therefore get revised almost every round; Thrift/Core can run older.
+    """
     from sim.engines.customer_score import position_distance
     dist = position_distance(product, segment)
-    if aggressiveness == "high":
-        return product.age > 1.5 or dist > 1.0
-    if aggressiveness == "medium":
-        return product.age > 2.5 or dist > 1.5
-    return product.age > 3.5 or dist > 2.5  # low (Chester style — save money)
+    if aggressiveness == "high":      # Baldwin — high-tech, keep Nano/Elite fresh
+        age_tol, dist_tol = 0.8, 1.0
+    elif aggressiveness == "medium":  # Digby — broad
+        age_tol, dist_tol = 1.2, 1.3
+    else:                              # low — Chester cost leader: let age run, track position
+        age_tol, dist_tol = 2.0, 1.2
+    return product.age > segment.ideal_age + age_tol or dist > dist_tol
 
 
 def baldwin_decisions(state: GameState) -> RoundDecision:
@@ -123,13 +132,13 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
     round_num = state.round_num + 1
 
     # ---- Affordability budget ----
-    # Cash available for discretionary spend = current cash - safety reserve.
-    # Keep ~15% of last sales as buffer for working capital changes (AR/AP/inv).
-    safety_reserve = max(5_000_000, company.sales_last * 0.10)
+    # available_cash = cash we can spend on CAPEX / bond-retire / dividend without
+    # risking an emergency loan. Operating expenses (marketing, TQM, HR) are funded
+    # by revenue during the year, so they are NOT scaled down here — starving them
+    # to hoard cash is a death spiral (TQM/marketing are investments that pay back).
+    # We only gate the genuine cash-out items (automation, capacity, bond retire).
+    safety_reserve = max(8_000_000, company.sales_last * 0.12)
     available_cash = max(0, company.cash - safety_reserve)
-    # Scale factor: 1.0 if plenty of cash, down to 0.3 if cash is tight
-    cash_health = min(1.0, available_cash / 25_000_000)
-    cash_health = max(0.3, cash_health)
 
     product_decisions = []
     for p in company.products:
@@ -139,9 +148,10 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
         # Pricing
         decision.price = pricing_for_product(p, seg, profile["price_strategy"])
 
-        # Marketing — scale down if cash tight
-        decision.promo_budget = int(profile["promo_budget_per_product"] * cash_health)
-        decision.sales_budget = int(profile["sales_budget_per_product"] * cash_health)
+        # Marketing — keep at full profile (operating expense funded by revenue;
+        # cutting it would decay awareness/accessibility = lose demand)
+        decision.promo_budget = int(profile["promo_budget_per_product"])
+        decision.sales_budget = int(profile["sales_budget_per_product"])
 
         # Sales Forecast: predict based on last year + segment growth
         seg_growth = seg.growth_rate
@@ -191,22 +201,34 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
                      if company.shares_outstanding > 0 else 0)
     finance = FinanceDecision(dividend_per_share=round(div_per_share, 2))
 
-    # Retire 13.5S2027 ONLY if plenty of cash (was $15M threshold = too aggressive)
+    # Retire 13.5S2027 ONLY from leftover CAPEX cash (available_cash after automation),
+    # and never in R1 (cash is committed to automation + ramping operations).
+    # BUG FIX: previously gated on stale full company.cash, so Chester retired an
+    # $11.5M bond in R1 on top of automation + operating spend → emergency loan.
     bonds_2027 = [b for b in company.bonds if b.year_due == 2027]
-    if bonds_2027:
+    if bonds_2027 and round_num >= 2:
         bond_face = sum(b.face_value for b in bonds_2027)
-        # Need 2x bond face to safely retire (1.5% fee + need cash for ops)
-        if company.cash > bond_face * 2.5:
+        retire_cash_out = bond_face * 1.05  # face + ~1.5% fee + price premium cushion
+        if available_cash > retire_cash_out * 1.4:
             finance.retire_bond_early = [b.series for b in bonds_2027]
+            available_cash -= retire_cash_out
 
-    # HR — scale recruit spend down if cash tight (training is cheap, keep full)
+    # Current debt: the engine repays ALL prior current debt each year, so an AI
+    # must ROLL it over (reborrow) or it bleeds that cash (Digby starts with $25.5M).
+    # Roll the existing balance, plus a small working-capital buffer in early rounds.
+    roll_over = company.current_debt
+    buffer = int(company.sales_last * 0.03) if round_num <= 2 else 0
+    finance.current_debt_borrow = int(roll_over + buffer)
+
+    # HR — operating expense; keep full (recruit cost is only on new hires, training is cheap)
     hr = HRDecision(
-        recruit_spend=int(profile["hr_recruit"] * cash_health),
+        recruit_spend=profile["hr_recruit"],
         training_hours=profile["hr_training"],
     )
 
-    # TQM: scale entire budget by cash_health
-    tqm_total = profile["tqm_spend_per_round"] * cash_health
+    # TQM: full profile budget (operating expense; investment that compounds —
+    # do NOT scale to hoard cash). Per-initiative $1.5M/round cap still applies.
+    tqm_total = profile["tqm_spend_per_round"]
     per_init_cap = 1_500_000  # $1.5M cap per initiative per round
     if round_num <= 2:
         tqm = TQMDecision(initiatives={
