@@ -31,21 +31,24 @@ def state():
 
 class TestCreditRating:
     def test_rating_brackets(self):
+        # Calibrated so real R0 companies match the Inquirer S&P (BB/BB/B/B).
         assert calculate_credit_rating(1.0) == "AAA"
-        assert calculate_credit_rating(1.5) == "AA"
-        assert calculate_credit_rating(2.0) == "A"
-        assert calculate_credit_rating(2.5) == "BBB"
-        assert calculate_credit_rating(3.0) == "BB"
-        assert calculate_credit_rating(3.5) == "B"
+        assert calculate_credit_rating(1.4) == "A"
+        assert calculate_credit_rating(1.74) == "BB"   # Andrews R0
+        assert calculate_credit_rating(1.90) == "BB"   # Baldwin R0
+        assert calculate_credit_rating(2.53) == "B"    # Digby R0
+        assert calculate_credit_rating(2.66) == "B"    # Chester R0
         assert calculate_credit_rating(10.0) == "D"
 
     def test_higher_leverage_lower_rating(self):
-        # Rating ordering
-        order = ["AAA", "AA", "A", "BBB", "BB", "B", "CCC", "CC", "C", "DDD", "DD", "D"]
-        seen = []
-        for lev in [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0]:
-            seen.append(calculate_credit_rating(lev))
-        assert seen == order
+        # Rating must be monotonically non-increasing as leverage rises.
+        order = ["AAA", "AA", "A", "BBB", "BB", "B", "CCC", "CC", "C", "D"]
+        rank = {r: i for i, r in enumerate(order)}
+        prev = -1
+        for lev in [1.0, 1.3, 1.5, 1.7, 2.1, 2.8, 3.5, 4.2, 5.0, 7.0]:
+            r = rank[calculate_credit_rating(lev)]
+            assert r >= prev
+            prev = r
 
 
 class TestComputeRatios:

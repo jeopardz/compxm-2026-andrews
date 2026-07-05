@@ -65,20 +65,20 @@ def bond_market_price(bond: Bond, current_lt_rate: float) -> float:
 
 def calculate_credit_rating(leverage: float) -> str:
     """
-    Credit rating from leverage (Assets/Equity).
-    Per Capsim guide: AAA at 1.0, drops 1 rating per ~0.5 leverage point.
+    Credit rating from leverage (Assets/Equity), calibrated so the real R0 companies
+    get their actual Inquirer S&P: Andrews 1.74=BB, Baldwin 1.90=BB, Chester 2.66=B,
+    Digby 2.53=B. Comp-XM weights debt heavily, so ratings drop faster than a naive
+    "AAA at 1.0" ladder (which wrongly gave every R0 company an 'A').
     """
     if leverage <= 1.0: return "AAA"
-    if leverage <= 1.5: return "AA"
-    if leverage <= 2.0: return "A"
-    if leverage <= 2.5: return "BBB"
-    if leverage <= 3.0: return "BB"
-    if leverage <= 3.5: return "B"
-    if leverage <= 4.0: return "CCC"
-    if leverage <= 4.5: return "CC"
+    if leverage <= 1.3: return "AA"
+    if leverage <= 1.5: return "A"
+    if leverage <= 1.7: return "BBB"
+    if leverage <= 2.1: return "BB"    # Andrews 1.74, Baldwin 1.90
+    if leverage <= 2.8: return "B"     # Chester 2.66, Digby 2.53
+    if leverage <= 3.5: return "CCC"
+    if leverage <= 4.2: return "CC"
     if leverage <= 5.0: return "C"
-    if leverage <= 5.5: return "DDD"
-    if leverage <= 6.0: return "DD"
     return "D"
 
 
