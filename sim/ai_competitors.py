@@ -81,8 +81,10 @@ def pricing_for_product(product: Product, segment: Segment, strategy: str) -> fl
         # Hold the high end (differentiation justifies it)
         return round(min(p_max - 1.0, max(mid + 2.0, product.price - 1.0)), 2)
     if strategy == "low":
-        # Price near the floor but never below margin_floor (cost leader advantage)
-        return round(max(p_min + 1.0, margin_floor, mid - 4.0), 2)
+        # Cost leader: stay in the low-competitive zone but DON'T slash to the floor —
+        # its automation gives a cost edge, so it should hold a healthy margin rather
+        # than give it away. Target ~lower-third of range, floored by margin safety.
+        return round(max(margin_floor + 1.5, mid - 2.5), 2)
     # mid / broad
     return round(max(margin_floor, min(p_max - 1.0, mid)), 2)
 
@@ -91,19 +93,26 @@ def should_revise(product: Product, segment: Segment, aggressiveness: str,
                    round_num: int) -> bool:
     """Decide whether to revise a product this round.
 
-    Segment-aware: revise when age exceeds the segment's IDEAL age by a tolerance,
-    or position drifts too far. Nano/Elite (ideal age 1.0/0.0, heavy age weight)
-    therefore get revised almost every round; Thrift/Core can run older.
+    CRITICAL: measure distance to the FUTURE (end-of-round) ideal spot, because the
+    product will be SOLD/scored against the DRIFTED segment — not where the segment
+    sits at decision time. Using the current (pre-drift) ideal made the AI decide
+    "close enough, don't revise", then the segment drifted away and the product lost
+    share and overproduced. Also use age+1 (the product ages over the year).
+
+    Segment-aware: Nano/Elite (ideal age 1.0/0.0, heavy age weight) get revised
+    almost every round; Thrift/Core can run a little older.
     """
-    from sim.engines.customer_score import position_distance
-    dist = position_distance(product, segment)
+    from math import sqrt
+    fut_pfmn, fut_size = predicted_ideal_at_round(segment, 1)
+    dist = sqrt((fut_pfmn - product.pfmn) ** 2 + (fut_size - product.size) ** 2)
+    year_end_age = product.age + 1.0
     if aggressiveness == "high":      # Baldwin — high-tech, keep Nano/Elite fresh
-        age_tol, dist_tol = 0.8, 1.0
+        age_tol, dist_tol = 0.8, 0.8
     elif aggressiveness == "medium":  # Digby — broad
-        age_tol, dist_tol = 1.2, 1.3
+        age_tol, dist_tol = 1.2, 1.0
     else:                              # low — Chester cost leader: let age run, track position
-        age_tol, dist_tol = 2.0, 1.2
-    return product.age > segment.ideal_age + age_tol or dist > dist_tol
+        age_tol, dist_tol = 2.0, 1.0
+    return year_end_age > segment.ideal_age + age_tol or dist > dist_tol
 
 
 def baldwin_decisions(state: GameState) -> RoundDecision:
