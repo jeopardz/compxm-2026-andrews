@@ -293,25 +293,22 @@ def income_statement(company: Company, year: int, prime_rate: float,
     tqm_lab = company.tqm.labor_cost_reduction
     tqm_adm = company.tqm.admin_cost_reduction
 
-    # Variable costs — labor_cost in seed is ALREADY post-automation (from Inquirer).
-    # Apply HR productivity_index, TQM reductions, AND 2nd-shift labor premium (1.5×).
-    # Use units_PRODUCED (not sold) — Capsim charges variable cost on production; unsold goes to inventory.
-    from sim.engines.production import SECOND_SHIFT_LABOR_MULTIPLIER
+    # Variable COGS is charged on units SOLD, NOT produced — unsold production is
+    # capitalized into inventory (an asset), not expensed. Verified against the real
+    # 2026 Inquirer: Andrews units_sold × (material+labor) + carry = $107.51M vs the
+    # Inquirer's $107.57M variable cost (0.06% match). Charging on units PRODUCED
+    # over-expensed by ~$23M and crushed net profit to $6M instead of $20.1M.
+    #
+    # The seed/realized labor cost per unit already reflects the round's shift blend,
+    # so no separate 2nd-shift premium here — overproduction is penalized via inventory
+    # carrying cost (below) + the BSC plant-utilization score, matching Capsim's IS.
     var_labor = 0.0
     var_material = 0.0
     for p in company.products:
-        # Base effective labor (1st shift): post-automation × HR × TQM
-        base_labor = p.labor_cost / max(0.5, pi) * (1 + tqm_lab)
-        prod_units = max(p.units_produced_last, p.units_sold_last)
-        # Split into 1st-shift (regular rate) and 2nd-shift (1.5× premium)
-        first_shift_units = min(prod_units, p.capacity_first_shift)
-        second_shift_units = max(0, prod_units - p.capacity_first_shift)
-        labor_per_product = (first_shift_units * base_labor
-                             + second_shift_units * base_labor * SECOND_SHIFT_LABOR_MULTIPLIER)
-        var_labor += labor_per_product * 1000
-        # Material has no shift premium
-        effective_material = p.material_cost * (1 + tqm_mat)
-        var_material += effective_material * prod_units * 1000
+        base_labor = p.labor_cost / max(0.5, pi) * (1 + tqm_lab)   # post-automation × HR × TQM
+        sold = p.units_sold_last
+        var_labor += base_labor * sold * 1000
+        var_material += p.material_cost * (1 + tqm_mat) * sold * 1000
 
     # Inventory carry: avg of (start, end) × 12% × unit cost
     inv_carry = sum(inventory_carry_cost(p, p.inventory) for p in company.products)
