@@ -392,7 +392,7 @@ CHESTER = Company(
     accounts_payable=7_459_000,
     current_debt=29_231_000,
     common_stock=29_958_000,
-    retained_earnings=54_648_000,
+    retained_earnings=24_514_000,  # was 54.648M — corrected so A=L+E balances (OCR jumbled RE); BV/sh $21.22 ≈ Inquirer $21.29
     shares_outstanding=2_566_964,
     stock_price=44.50,
     dividend_per_share=4.93,
@@ -433,7 +433,7 @@ DIGBY = Company(
     accounts_payable=10_205_000,
     current_debt=25_558_000,
     common_stock=14_328_000,
-    retained_earnings=53_243_000,
+    retained_earnings=36_060_000,  # was 53.243M — corrected so A=L+E balances (OCR jumbled RE); BV/sh $23.21 (Inquirer $24.52)
     shares_outstanding=2_171_290,
     stock_price=53.17,
     dividend_per_share=2.84,

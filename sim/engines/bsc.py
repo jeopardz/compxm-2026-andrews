@@ -76,15 +76,17 @@ WEIGHTS = {
 
 
 def stock_price_score(current: float, last_round: float, max_pts: int = 8) -> float:
-    growth = current - last_round
-    if growth <= 0:
-        return 0.0
-    return min(max_pts, growth / 5.0 * max_pts / 5)  # +1pt per $5
+    """Absolute stock price (Comp-XM threshold): full at >=$80, partial $40-80, low below."""
+    if current >= 80:
+        return float(max_pts)
+    if current >= 40:
+        return max_pts * (0.4 + 0.6 * (current - 40) / 40)  # $40->0.4x, $80->1.0x
+    return max(0, max_pts * 0.4 * (current / 40))
 
 
 def profit_score(profit_m: float, max_pts: int = 9) -> float:
-    """Profit score: +1pt per $1M, max points at $9M+."""
-    return min(max_pts, max(0, profit_m))
+    """Profit score: full at $7M+/round (Comp-XM threshold), scaled below."""
+    return min(max_pts, max(0, profit_m / 7.0 * max_pts))
 
 
 def leverage_score(lev: float, max_pts: int = 8) -> float:
@@ -97,18 +99,26 @@ def leverage_score(lev: float, max_pts: int = 8) -> float:
 
 
 def contribution_margin_score(cm_pct: float, max_pts: int = 5) -> float:
-    if cm_pct >= 0.30:
+    """Full at 36%+ (Comp-XM target), partial 30-36%, scaled below."""
+    if cm_pct >= 0.36:
         return float(max_pts)
-    return max(0, max_pts * (cm_pct / 0.30))
+    if cm_pct >= 0.30:
+        return max_pts * (0.6 + 0.4 * (cm_pct - 0.30) / 0.06)
+    return max(0, max_pts * 0.6 * (cm_pct / 0.30))
 
 
 def plant_util_score(util_pct: float, max_pts: int = 5) -> float:
-    if 100 <= util_pct <= 150:
+    """Comp-XM: 150-200% is IDEAL (2nd shift used efficiently), 100-150% partial,
+    <100% wasted capacity, >200% impossible/penalized. (Was penalizing 150%+, which
+    is exactly the good behavior — Andrews R0 ran Attic at 188%.)"""
+    if 150 <= util_pct <= 200:
         return float(max_pts)
+    if 100 <= util_pct < 150:
+        return max_pts * (0.5 + 0.5 * (util_pct - 100) / 50)  # 100%->0.5, 150%->1.0
     if util_pct < 100:
-        return max(0, max_pts * (util_pct / 100))
-    # Above 150%, penalty
-    return max(0, max_pts - (util_pct - 150) / 10)
+        return max(0, max_pts * 0.5 * (util_pct / 100))
+    # Above 200%: over capacity, penalize down to 0 at 250%
+    return max(0, max_pts * (1 - (util_pct - 200) / 50))
 
 
 def working_capital_score(days: float, max_pts: int = 5) -> float:
@@ -143,11 +153,10 @@ def product_count_score(active_products: int, max_pts: int = 5) -> float:
 
 
 def sga_score(sga_pct: float, max_pts: int = 5) -> float:
-    if 0.10 <= sga_pct <= 0.15:
+    """Comp-XM: SG&A/Sales <=12% = full, scaling down above that."""
+    if sga_pct <= 0.12:
         return float(max_pts)
-    if sga_pct < 0.10:
-        return max(0, max_pts * (sga_pct / 0.10))
-    return max(0, max_pts - (sga_pct - 0.15) * 20)
+    return max(0, max_pts * (1 - (sga_pct - 0.12) / 0.13))  # 0 at 25%
 
 
 def forecast_score(forecast_units: int, actual_units: int, max_pts: int = 5) -> float:
@@ -164,9 +173,10 @@ def productivity_score(pi: float, max_pts: int = 7) -> float:
 
 
 def turnover_score(turnover_rate: float, max_pts: int = 6) -> float:
-    if turnover_rate <= 0.05:
+    """Comp-XM: turnover <=7% = full, scaling down to 0 at ~12%."""
+    if turnover_rate <= 0.07:
         return float(max_pts)
-    return max(0, max_pts * (1 - (turnover_rate - 0.05) / 0.05))
+    return max(0, max_pts * (1 - (turnover_rate - 0.07) / 0.05))
 
 
 def hr_invest_score(hr_admin_cost: float, max_pts: int = 5) -> float:
@@ -195,9 +205,18 @@ def compute_round_bsc(state: GameState, company_name: str = "Andrews",
     cm_pct = c.contribution_margin_last / max(1, c.sales_last)
     fin_cm = contribution_margin_score(cm_pct)
     financial = fin_stock + fin_profit + fin_lev + fin_cm
+    # Emergency loan = severe penalty (Comp-XM: -50 to -100 pts of 1000; here the
+    # per-round financial max is ~30, so scale a heavy deduction). Missing before.
+    emergency_penalty = 0.0
+    if c.emergency_loan > 10_000_000:
+        emergency_penalty = 25.0
+    elif c.emergency_loan > 0:
+        emergency_penalty = 15.0
+    financial = max(0.0, financial - emergency_penalty)
     metrics.update({
         "fin_stock_price": fin_stock, "fin_profit": fin_profit,
         "fin_leverage": fin_lev, "fin_contribution_margin": fin_cm,
+        "fin_emergency_penalty": -emergency_penalty,
     })
 
     # Internal Business

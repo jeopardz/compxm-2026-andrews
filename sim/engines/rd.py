@@ -21,8 +21,8 @@ from sim.data_models import Product
 BASE_RD_COST = 1_000_000.0          # $ minimum per project
 COST_PER_POSITION_UNIT = 500_000.0  # $ per unit of (pfmn or size) change
 COST_PER_MTBF_1000 = 5000.0         # $ per 1000 MTBF unit change
-BASE_PROJECT_DAYS = 60              # ~2 months minimum
-DAYS_PER_DISTANCE_UNIT = 180        # ~6 months per unit distance
+BASE_PROJECT_DAYS = 45              # ~1.5 month floor (MTBF-only / tiny move)
+DAYS_PER_DISTANCE_UNIT = 175        # ~5.75 months per unit distance
 
 
 def rd_distance(p: Product, new_pfmn: float, new_size: float) -> float:
@@ -38,7 +38,12 @@ def rd_project_days(p: Product, new_pfmn: float, new_size: float,
     rd_cycle_reduction: fraction (e.g., 0.20 = 20% faster from TQM)
     """
     dist = rd_distance(p, new_pfmn, new_size)
-    days = BASE_PROJECT_DAYS + dist * DAYS_PER_DISTANCE_UNIT
+    # Calibrated to real Comp-XM revision dates (cheatsheet R1): ~175 days per unit
+    # of position distance — dist 0.5≈3mo, 1.0≈6mo, 1.4≈8mo, 1.84≈10mo (completes
+    # in-year), min ~45 days. Was 60 + 180×dist which ran ~40% too slow, pushing a
+    # normal 1.8-unit revise to 391 days (spilling into next year and failing the
+    # "revise toward this round's ideal spot to win this round" strategy).
+    days = max(BASE_PROJECT_DAYS, dist * DAYS_PER_DISTANCE_UNIT)
     days *= (1 - rd_cycle_reduction)
     return int(round(days))
 

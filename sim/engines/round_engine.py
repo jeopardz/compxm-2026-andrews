@@ -85,9 +85,10 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
                          round_start_date=round_start,
                          rd_cycle_reduction=-rd_cycle_reduction)  # TQM reduction is negative
 
-        # Pricing
+        # Pricing — floor at $0 so a negative price can't create negative revenue
+        # (real Comp-XM rejects prices outside the band; at minimum never go below 0)
         if pdec.price is not None:
-            p.price = pdec.price
+            p.price = max(0.0, pdec.price)
 
         # Marketing — ALWAYS decay awareness (call with $0 if no decision)
         # so awareness doesn't stay frozen at prior value when user submits blank
@@ -241,6 +242,10 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
     Run one full round: apply decisions, simulate, compute reports.
     Returns dict with round results + BSC.
     """
+    # Comp-XM is a fixed 4-round competition — never simulate a 5th round.
+    if state.round_num >= 4:
+        raise ValueError("Game is complete (R4 already played). Reset to play again.")
+
     summary = {
         "round_num": state.round_num + 1,
         "year_from": state.year,

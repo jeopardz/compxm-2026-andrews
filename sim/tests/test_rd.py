@@ -91,10 +91,10 @@ class TestApplyReviseAndCompletion:
         assert p.age == pytest.approx(old_age / 2.0 + 10/12.0, abs=0.2)
 
     def test_long_revise_does_not_complete_in_year(self, state):
-        """A big revise takes >365 days -> does not complete by end of 2026."""
+        """A big revise (>~2.1 units, i.e. >365 days at 175 days/unit) spills over."""
         p = state.get_company("Andrews").products[0]
-        # 2-unit move plus MTBF
-        apply_revise(p, p.pfmn + 2.0, p.size, 20000, "2026-01-01")
+        # 3-unit move -> 175*3 = 525 days -> does NOT complete by end of 2026
+        apply_revise(p, p.pfmn + 3.0, p.size, 20000, "2026-01-01")
         completed = end_of_year_apply_completed_projects(p, "2026-12-31")
         assert completed is False
         # Targets remain pending

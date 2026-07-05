@@ -186,16 +186,24 @@ def issue_stock(company: Company, amount: float, current_price: Optional[float] 
 
 
 def buyback_stock(company: Company, amount: float, current_price: Optional[float] = None) -> Dict:
-    """Buy back shares at current market price. Reduces shares and equity."""
+    """Buy back shares at current market price. Reduces shares and equity.
+    Capsim caps buyback at 5% of shares outstanding per round; also never lets
+    shares go negative. (Was unclamped — a huge buyback drove shares_outstanding
+    massively negative and triggered a bogus multi-billion emergency loan.)"""
     if current_price is None:
         current_price = company.stock_price
     if current_price <= 0 or amount <= 0:
         return {"bought": 0, "shares": 0}
-    shares = int(amount / current_price)
+    max_shares = int(company.shares_outstanding * 0.05)   # Capsim 5%/round limit
+    shares = min(int(amount / current_price), max_shares)
+    shares = max(0, min(shares, company.shares_outstanding - 1))  # keep >=1 share
+    if shares <= 0:
+        return {"bought": 0, "shares": 0}
+    actual_spend = shares * current_price
     company.shares_outstanding -= shares
-    company.retained_earnings -= amount  # reduces equity
-    company.cash -= amount
-    return {"bought": amount, "shares": shares, "price": current_price}
+    company.retained_earnings -= actual_spend  # reduces equity
+    company.cash -= actual_spend
+    return {"bought": actual_spend, "shares": shares, "price": current_price}
 
 
 def pay_dividend(company: Company, per_share: float) -> float:
