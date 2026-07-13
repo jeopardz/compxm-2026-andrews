@@ -27,6 +27,8 @@ from sim.board_queries import get_round_queries, grade_round
 from sim.board_query_gen import generate_round_queries, grade_generated
 from sim.engines.tqm import INITIATIVE_NAMES, recommended_initiatives_for_round
 from sim.state_migration import normalize_save_payload
+from sim.legal import render_legal_links, render_public_page_if_requested
+from sim.monitoring import init_monitoring
 
 # SaaS layer — all no-ops when AUTH_ENABLED is false (local study mode unchanged).
 from sim.auth import auth_enabled, require_login, render_logout, init_cookies
@@ -43,6 +45,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+init_monitoring()
 
 
 # ============================================================
@@ -388,6 +391,7 @@ BIZSIM_CSS = """
 """
 
 st.markdown(BIZSIM_CSS, unsafe_allow_html=True)
+render_public_page_if_requested()
 
 
 # ============================================================
@@ -2658,6 +2662,7 @@ with _adv_c2:
 # FOOTER + UTILITY BAR
 # ============================================================
 
+render_legal_links()
 st.markdown("---")
 fcol1, fcol2, fcol3, fcol4 = st.columns([2, 1, 1, 1])
 with fcol1:

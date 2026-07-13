@@ -5,7 +5,7 @@ launch.
 
 ## Verification baseline
 
-- `python -m pytest sim/tests -q`: **189 passed**
+- `python -m pytest sim/tests -q`: **191 passed**
 - Streamlit AppTest: **0 exceptions**
 - Scenario gauntlet: **60/60 valid**, **0 difficulty mismatches**
 - Generated Board Queries: **2,640 checked**, **0 duplicate visible options**
@@ -69,6 +69,15 @@ launch.
 - Deployment/status documentation was replaced with the current workflow.
 - Dashboard newspaper mastheads were removed; the canonical masthead remains in
   Market Report.
+
+## Launch-surface additions
+
+- Public query-addressable Privacy, Terms and Support pages render before the
+  authentication gate and remain linked from login and application views.
+- A real `SUPPORT_EMAIL` is required at deployment; the application never invents
+  a contact address.
+- Production logging is enabled and Sentry error reporting can be enabled with
+  `SENTRY_DSN`; default PII collection is explicitly disabled.
 
 ## Required production rollout
 

@@ -269,6 +269,9 @@ def render_login_page() -> None:
                 ok, msg = send_password_reset(email.strip())
                 (st.success if ok else st.error)(msg)
 
+    from sim.legal import render_legal_links
+    render_legal_links()
+
 
 def require_login() -> None:
     """Gate the app: in SaaS mode, show the login page and stop unless signed in.
