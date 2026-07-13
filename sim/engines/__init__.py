@@ -1,1 +1,1 @@
-"""Comp-XM simulation engines."""
+"""BizSim simulation engines."""

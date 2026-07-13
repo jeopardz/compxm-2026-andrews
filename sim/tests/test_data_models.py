@@ -44,7 +44,7 @@ class TestSchemas:
         assert b.market_close == 100.0  # default
 
     def test_company_total_equity_assets_liabilities(self):
-        c = Company(name="Andrews", products=[],
+        c = Company(name="Apex", products=[],
                     cash=10, accounts_receivable=5,
                     inventory_value=20, plant_value=100,
                     accumulated_depreciation=40,
@@ -78,19 +78,19 @@ class TestR0Seed:
 
     def test_r0_four_companies(self, r0_state):
         names = [c.name for c in r0_state.companies]
-        assert names == ["Andrews", "Baldwin", "Chester", "Digby"]
+        assert names == ["Apex", "Borealis", "Crestline", "Dynamo"]
 
     def test_r0_segments_four(self, r0_state):
         names = sorted(s.name for s in r0_state.segments)
         assert names == ["Core", "Elite", "Nano", "Thrift"]
 
-    def test_andrews_r0_official_values(self, r0_state):
-        andrews = r0_state.get_company("Andrews")
-        assert andrews.stock_price == pytest.approx(95.38, abs=0.01)
-        assert andrews.sales_last == pytest.approx(163_291_000, abs=1000)
-        assert andrews.ros == pytest.approx(0.123, abs=0.001)
-        assert andrews.roe == pytest.approx(0.283, abs=0.001)
-        assert len(andrews.products) == 4
+    def test_apex_r0_reference_values(self, r0_state):
+        apex = r0_state.get_company("Apex")
+        assert apex.stock_price == pytest.approx(95.38, abs=0.01)
+        assert apex.sales_last == pytest.approx(163_291_000, abs=1000)
+        assert apex.ros == pytest.approx(0.123, abs=0.001)
+        assert apex.roe == pytest.approx(0.283, abs=0.001)
+        assert len(apex.products) == 4
 
     def test_industry_demand_totals(self, r0_state):
         assert R0_INDUSTRY_DEMAND["Thrift"] == 5101
@@ -123,16 +123,16 @@ class TestR0Seed:
         assert nano.growth_rate == pytest.approx(0.14)
         assert elite.growth_rate == pytest.approx(0.16)
 
-    def test_andrews_bonds_total(self, r0_state):
-        andrews = r0_state.get_company("Andrews")
-        total = sum(b.face_value for b in andrews.bonds)
+    def test_apex_bonds_total(self, r0_state):
+        apex = r0_state.get_company("Apex")
+        total = sum(b.face_value for b in apex.bonds)
         # 11.3M + 8.837M + 7.072M = 27.209M (~$27.2M)
         assert total == pytest.approx(27_209_000, abs=1000)
-        assert len(andrews.bonds) == 3
+        assert len(apex.bonds) == 3
 
     def test_get_segment_get_company_get_product(self, r0_state):
         assert r0_state.get_segment("Core").name == "Core"
-        assert r0_state.get_company("Baldwin").name == "Baldwin"
-        assert r0_state.get_product("Attic").company == "Andrews"
+        assert r0_state.get_company("Borealis").name == "Borealis"
+        assert r0_state.get_product("Atlas").company == "Apex"
         with pytest.raises(KeyError):
             r0_state.get_company("Unknown")

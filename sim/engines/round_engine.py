@@ -1,9 +1,9 @@
 """
-Round Advancement Engine — orchestrates one round of Comp-XM simulation.
+Round Advancement Engine — orchestrates one round of BizSim simulation.
 
 Sequence per round:
-  1. Apply Andrews decisions (R&D, Marketing, Production, Finance, HR, TQM)
-  2. Generate AI decisions for Baldwin, Chester, Digby
+  1. Apply Apex decisions (R&D, Marketing, Production, Finance, HR, TQM)
+  2. Generate AI decisions for Borealis, Crestline, Dynamo
   3. Apply AI decisions
   4. Advance the year:
      a. Segments drift
@@ -40,7 +40,7 @@ from sim.engines.finance import (
 )
 from sim.engines.hr import update_hr, labor_cost_adjustment
 from sim.engines.tqm import update_tqm
-from sim.ai_competitors import baldwin_decisions, chester_decisions, digby_decisions
+from sim.ai_competitors import borealis_decisions, crestline_decisions, dynamo_decisions
 from sim.engines.bsc import compute_round_bsc
 
 
@@ -53,6 +53,7 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
     automation_total_cost = 0.0
     capacity_buy_cost = 0.0
     capacity_sell_proceeds = 0.0
+    transaction_other = 0.0
     round_start = f"{state.year + 1}-01-01"
 
     # Apply HR + TQM FIRST so THIS round's TQM benefits (incl. the R&D cycle-time
@@ -62,6 +63,16 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
     hr_result = update_hr(company, decisions.hr.recruit_spend, decisions.hr.training_hours)
     tqm_result = update_tqm(company, decisions.tqm.initiatives)
     rd_cycle_reduction = company.tqm.rd_cycle_time_reduction
+
+    # Count how many products this company is actually revising this round (a project is
+    # only counted if the product isn't already locked by an in-flight prior project).
+    _concurrent = 0
+    for _pd in decisions.products:
+        if _pd.new_pfmn is not None or _pd.new_size is not None or _pd.new_mtbf is not None:
+            _p = next((pp for pp in company.products if pp.name == _pd.product_name), None)
+            if _p and not (_p.rd_completion_date and _p.rd_completion_date > round_start):
+                _concurrent += 1
+    _concurrent = max(1, _concurrent)
 
     # Per-product decisions
     for pdec in decisions.products:
@@ -76,23 +87,30 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
         # revise — pfmn/size changes were silently discarded.
         if (pdec.new_pfmn is not None or pdec.new_size is not None
                 or pdec.new_mtbf is not None):
+            # Cross-round R&D lock: a product whose prior project is still in flight
+            # (completes after this round starts) cannot begin a new project — its R&D
+            # cells are locked until the current one finishes.
+            if p.rd_completion_date and p.rd_completion_date > round_start:
+                continue
             tgt_pfmn = pdec.new_pfmn if pdec.new_pfmn is not None else p.pfmn
             tgt_size = pdec.new_size if pdec.new_size is not None else p.size
             tgt_mtbf = pdec.new_mtbf if pdec.new_mtbf is not None else p.mtbf
+            tgt_mtbf = max(10_000, min(27_000, tgt_mtbf))
             cost = rd_project_cost(p, tgt_pfmn, tgt_size, tgt_mtbf)
             rd_total_cost += cost
             apply_revise(p, tgt_pfmn, tgt_size, tgt_mtbf,
                          round_start_date=round_start,
-                         rd_cycle_reduction=-rd_cycle_reduction)  # TQM reduction is negative
+                         rd_cycle_reduction=-rd_cycle_reduction,  # TQM reduction is negative
+                         concurrent_projects=_concurrent)
 
         # Pricing — floor at $0 so a negative price can't create negative revenue
-        # (real Comp-XM rejects prices outside the band; at minimum never go below 0)
+        # (BizSim rejects prices outside the band; at minimum never go below 0)
         if pdec.price is not None:
             p.price = max(0.0, pdec.price)
 
         # Marketing — ALWAYS decay awareness (call with $0 if no decision)
         # so awareness doesn't stay frozen at prior value when user submits blank
-        update_awareness(p, pdec.promo_budget if pdec.promo_budget is not None else 0)
+        update_awareness(p, pdec.promo_budget if pdec.promo_budget is not None else p.promo_budget)
 
         # Track sales_budget on product (used later for accessibility update in advance_round)
         if pdec.sales_budget is not None:
@@ -111,32 +129,44 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
             if pdec.capacity_change > 0:
                 cost = capacity_purchase_cost(pdec.capacity_change, p.automation)
                 capacity_buy_cost += cost
+                company.plant_value += cost
                 p.capacity_first_shift += pdec.capacity_change
             else:
                 # Clamp sell to not exceed current capacity
                 sell_units = min(-pdec.capacity_change, p.capacity_first_shift)
                 proceeds = capacity_sell_value(sell_units, p.automation)
                 capacity_sell_proceeds += proceeds
-                # Reduce accumulated_depreciation proportionally to capacity sold
-                # (sold plant takes its share of accum_dep with it)
-                if p.capacity_first_shift > 0:
-                    sold_fraction = sell_units / p.capacity_first_shift
-                    dep_reduction = company.accumulated_depreciation * sold_fraction * (
-                        plant_value(p) / max(1, sum(plant_value(pp) for pp in company.products))
-                    )
-                    company.accumulated_depreciation = max(0, company.accumulated_depreciation - dep_reduction)
+                # Derecognize this line's proportional historical gross cost and
+                # accumulated depreciation. Sale gain/loss is posted through Other.
+                if p.capacity_first_shift > 0 and company.plant_value > 0:
+                    line_weight = plant_value(p) / max(1, sum(plant_value(pp) for pp in company.products))
+                    gross_removed = company.plant_value * line_weight * sell_units / p.capacity_first_shift
+                    dep_removed = company.accumulated_depreciation * line_weight * sell_units / p.capacity_first_shift
+                    book_value = max(0.0, gross_removed - dep_removed)
+                    company.plant_value = max(0.0, company.plant_value - gross_removed)
+                    company.accumulated_depreciation = max(0.0, company.accumulated_depreciation - dep_removed)
+                    transaction_other += book_value - proceeds
+                    # Book value is the direct investing cash component; the after-tax
+                    # gain/loss reaches cash through net income later in the round.
+                    capacity_sell_proceeds += book_value - proceeds
                 p.capacity_first_shift = max(0, p.capacity_first_shift - sell_units)
 
-        # Automation upgrade — RESCALE labor_cost so new automation actually reduces labor
-        # (seed labor_cost is already post-automation for current level; need to rescale to new level)
-        if pdec.new_automation is not None and pdec.new_automation > p.automation:
+        # Automation change (EITHER direction) — RESCALE labor_cost so new automation
+        # actually changes labor. BizSim charges the $4/point/unit retooling cost for
+        # both raising AND lowering automation; lowering also raises labor cost back up.
+        # (Was: only handled upgrades, so a downgrade for faster R&D was free AND kept
+        # the old low labor cost — doubly unauthentic.)
+        if pdec.new_automation is not None and pdec.new_automation != p.automation:
             cost = automation_upgrade_cost(p.capacity_first_shift, p.automation, pdec.new_automation)
             automation_total_cost += cost
+            # Retooling is capitalized at historical cost in either direction. Never
+            # rebuild gross plant from the new automation setting.
+            company.plant_value += cost
             from sim.engines.production import labor_cost_factor as _lcf
             old_factor = _lcf(p.automation)
             new_factor = _lcf(pdec.new_automation)
             if old_factor > 0:
-                # Scale labor proportionally to factor reduction
+                # Scale labor proportionally to factor change (down on upgrade, up on downgrade)
                 p.labor_cost = round(p.labor_cost * new_factor / old_factor, 2)
             p.automation = pdec.new_automation
 
@@ -150,15 +180,31 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
     # apply decisions (avoids 4x decay bug). Per-company sales_budget already set on products
     # via the loop above. HR + TQM were already applied at the top of this function.
 
+    # Carry the AR/AP terms onto the company BEFORE produce_and_sell so this round's
+    # customer-survey score (AR) and material availability (AP) reflect them (Spec §4.6).
+    company.ar_lag = decisions.finance.accounts_receivable_lag
+    company.ap_lag = decisions.finance.accounts_payable_lag
+
+    # AP material withholding: stretching payables past ~60 days makes suppliers hold
+    # back material, so the line can't hit its schedule (Spec §4.6). Applied after the
+    # capacity re-clamp above.
+    from sim.engines.production import material_availability as _mat_avail
+    _avail = _mat_avail(company.ap_lag)
+    if _avail < 1.0:
+        for _p in company.products:
+            _p.production_schedule = int(_p.production_schedule * _avail)
+
     # Finance: bonds & stock first
     bond_issue_proceeds = 0.0
     for b in list(company.bonds):
         if b.series in decisions.finance.retire_bond_early:
             ret = retire_bond_early(company, b.series)
+            transaction_other += ret.get("other_expense", 0.0)
     if decisions.finance.issue_bond > 0:
         result = issue_bond(company, decisions.finance.issue_bond,
                              state.prime_interest_rate, state.year + 1)
         bond_issue_proceeds = result["net_proceeds"]
+        transaction_other += result["fee"]
     if decisions.finance.issue_stock > 0:
         issue_stock(company, decisions.finance.issue_stock)
     if decisions.finance.buyback_stock > 0:
@@ -178,6 +224,7 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
         "bond_issued": bond_issue_proceeds,
         "hr_admin": hr_result["total_hr_admin"],
         "tqm_spend": tqm_result["round_spend"],
+        "transaction_other": transaction_other,
     }
 
 
@@ -198,6 +245,7 @@ def produce_and_sell(state: GameState) -> Dict[str, Dict]:
         company_revenue = 0.0
         for p in c.products:
             sold = units_sold.get(p.name, 0)
+            p.potential_demand_last = total_demand.get(p.name, 0)
             produced = min(p.production_schedule, p.inventory + p.production_schedule)
             p.units_sold_last = sold
             p.units_produced_last = p.production_schedule
@@ -217,32 +265,13 @@ def produce_and_sell(state: GameState) -> Dict[str, Dict]:
     return company_summary
 
 
-def year_end_advance(state: GameState) -> None:
-    """
-    End-of-year transitions:
-      - Apply completed R&D projects (position/MTBF/age update)
-      - For products without revise, age +1 year
-      - Retire matured bonds
-      - Drift segments + grow demand for NEXT round
-    """
-    year_start = f"{state.year + 1}-01-01"
-    year_end = f"{state.year + 1}-12-31"
-    for c in state.companies:
-        for p in c.products:
-            completed = end_of_year_apply_completed_projects(p, year_end, year_start)
-            if not completed:
-                advance_age_one_year(p)
-        # Retire matured bonds
-        retire_matured_bonds(c, state.year + 1)
-
-
-def advance_round(state: GameState, andrews_decisions: RoundDecision,
+def advance_round(state: GameState, apex_decisions: RoundDecision,
                    prev_state: Optional[GameState] = None) -> Dict:
     """
     Run one full round: apply decisions, simulate, compute reports.
     Returns dict with round results + BSC.
     """
-    # Comp-XM is a fixed 4-round competition — never simulate a 5th round.
+    # BizSim is a fixed 4-round competition — never simulate a 5th round.
     if state.round_num >= 4:
         raise ValueError("Game is complete (R4 already played). Reset to play again.")
 
@@ -256,19 +285,19 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         "bsc": None,
     }
 
-    # 1. Apply Andrews decisions
-    andrews = state.get_company("Andrews")
-    spend_andrews = apply_company_decisions(andrews, andrews_decisions, state, state.companies)
-    summary["decisions_applied"]["Andrews"] = spend_andrews
+    # 1. Apply Apex decisions
+    apex = state.get_company("Apex")
+    spend_apex = apply_company_decisions(apex, apex_decisions, state, state.companies)
+    summary["decisions_applied"]["Apex"] = spend_apex
 
     # Track each company's decision so the financials step can honor its own
-    # finance choices (dividend, AR/AP lag, current-debt borrow) — not just Andrews'.
-    decisions_by_company = {"Andrews": andrews_decisions}
+    # finance choices (dividend, AR/AP lag, current-debt borrow) — not just Apex's.
+    decisions_by_company = {"Apex": apex_decisions}
 
     # 2. Generate + apply AI decisions
-    for ai_name, gen_fn in [("Baldwin", baldwin_decisions),
-                              ("Chester", chester_decisions),
-                              ("Digby", digby_decisions)]:
+    for ai_name, gen_fn in [("Borealis", borealis_decisions),
+                              ("Crestline", crestline_decisions),
+                              ("Dynamo", dynamo_decisions)]:
         ai_decs = gen_fn(state)
         decisions_by_company[ai_name] = ai_decs
         spend = apply_company_decisions(state.get_company(ai_name), ai_decs, state, state.companies)
@@ -285,7 +314,7 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         update_accessibility(state.companies, seg.name, sales_per_product)
 
     # 2.7 Advance market + products to END-OF-YEAR *before* scoring/selling.
-    # CAPSIM TIMING FIX (was off-by-one): the December customer survey is scored
+    # BIZSIM TIMING FIX (was off-by-one): the December customer survey is scored
     # against the year's ENDING segment positions, and a product revised this year
     # sells at its NEW position for the rest of the year. So we must:
     #   (a) grow industry demand to this year's level,
@@ -298,21 +327,29 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
     drift_segments(state)
     _ys = f"{state.year + 1}-01-01"
     _ye = f"{state.year + 1}-12-31"
+    from sim.engines.production import WAGE_INFLATION_RATE
+    matured_this_round = {}
+    matured_interest_this_round = {}
     for _c in state.companies:
         for _p in _c.products:
+            # Annual contractual wage increase — labor cost creeps up every year.
+            _p.labor_cost = round(_p.labor_cost * (1 + WAGE_INFLATION_RATE), 2)
             if not end_of_year_apply_completed_projects(_p, _ye, _ys):
                 advance_age_one_year(_p)
-        retire_matured_bonds(_c, state.year + 1)
+        matured = retire_matured_bonds(_c, state.year + 1)
+        matured_this_round[_c.name] = sum(x["amount"] for x in matured)
+        matured_interest_this_round[_c.name] = sum(x["final_coupon_interest"] for x in matured)
 
     # 3. Produce + sell (now scored at end-of-year segment + product positions)
     prod_summary = produce_and_sell(state)
     summary["production_summary"] = prod_summary
 
-    # 3.5 Update industry_unit_sold by segment for the Inquirer (FIX: was stale at R0 forever)
+    # 3.5 Update industry_unit_sold by segment for the Market Report (FIX: was stale at R0 forever)
     new_industry_sold = {s.name: 0 for s in state.segments}
     for c in state.companies:
         for p in c.products:
-            new_industry_sold[p.primary_segment] = new_industry_sold.get(p.primary_segment, 0) + p.units_sold_last
+            for segment_name, sold in p.segment_sales_last.items():
+                new_industry_sold[segment_name] = new_industry_sold.get(segment_name, 0) + sold
     state.industry_unit_sold = new_industry_sold
 
     # 4. Calculate financials per company
@@ -325,9 +362,14 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         # but should also appear in income statement as SGA/Other
         # R&D cost (recompute from this round's spend)
         rd_spent = summary["decisions_applied"].get(c.name, {}).get("rd_cost", 0)
+        depreciation = c.plant_value / 15
         is_dict = income_statement(c, state.year + 1, state.prime_interest_rate,
                                    hr_admin_cost=hr_admin, tqm_spend=tqm_round_spend,
-                                   rd_cost=rd_spent)
+                                   rd_cost=rd_spent,
+                                   transaction_other=summary["decisions_applied"].get(c.name, {}).get("transaction_other", 0),
+                                   depreciation=depreciation,
+                                   rolled_current_debt=matured_this_round.get(c.name, 0),
+                                   matured_bond_interest=matured_interest_this_round.get(c.name, 0))
         # Cash flow: cash already updated by various functions
         # Pay dividend — honor each company's own decision (AI sets it in ai_competitors
         # from prior-year profit, like a real board declaring before results are known).
@@ -339,8 +381,6 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
 
         # === Cash Flow from Operations (GAAP) ===
         # = NetProfit + Depreciation - ΔAR - ΔInv + ΔAP
-        depreciation = sum(annual_depreciation(p) for p in c.products)
-
         # Snapshot pre-update working capital
         old_ar = c.accounts_receivable
         old_ap = c.accounts_payable
@@ -348,7 +388,9 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
 
         # Compute new working capital (labor in seed is post-automation — no factor)
         new_inv = sum(
-            p.inventory * (p.material_cost + p.labor_cost / max(0.5, c.hr.productivity_index)) * 1000
+            p.inventory * (p.material_cost * (1 + c.tqm.material_cost_reduction)
+                           + p.labor_cost / max(0.5, c.hr.productivity_index)
+                           * (1 + c.tqm.labor_cost_reduction)) * 1000
             for p in c.products
         )
         # AR/AP lag — each company's own policy (AI defaults to 30 days)
@@ -363,12 +405,15 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         delta_inv = new_inv - old_inv
         c.cash += c.profit_last + depreciation - delta_ar - delta_inv + delta_ap
 
-        # === Repay current debt (Capsim: short-term debt due annually) ===
+        # === Repay current debt (BizSim: short-term debt due annually) ===
         # Then re-borrow if user requested new current_debt_borrow
-        repay = c.current_debt
+        # A bond that matured moments ago rolls into a one-year note and is not due
+        # until next round. Only opening current debt is repaid now.
+        rolled = matured_this_round.get(c.name, 0.0)
+        repay = max(0.0, c.current_debt - rolled)
         c.cash -= repay  # pay off prior current debt
         new_borrow = dec_fin.current_debt_borrow  # honor each company's borrow decision
-        c.current_debt = new_borrow
+        c.current_debt = rolled + new_borrow
         c.cash += new_borrow
 
         # Emergency loan if cash went negative (adds to current_debt for next year)
@@ -381,9 +426,6 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         c.accounts_payable = new_ap
         c.retained_earnings += c.profit_last  # less dividends (already paid above)
 
-        # Update plant value to actual current
-        c.plant_value = sum(plant_value(p) for p in c.products)
-
         # Update ratios + stock price + rating
         compute_ratios(c)
         update_stock_price(c)
@@ -391,23 +433,23 @@ def advance_round(state: GameState, andrews_decisions: RoundDecision,
         summary["financials"][c.name] = is_dict
 
     # 5. (Market advance, R&D completion, aging, and bond maturity already happened
-    #     in step 2.7 — before the sale — per the Capsim timing fix.)
+    #     in step 2.7 — before the sale — per the BizSim timing fix.)
     state.round_num += 1
     state.year += 1
 
     # 7. BSC for this round
-    bsc = compute_round_bsc(state, "Andrews", prev_state=prev_state)
+    bsc = compute_round_bsc(state, "Apex", prev_state=prev_state)
     summary["bsc"] = bsc.model_dump()
 
     # 8. Snapshot history
     state.history.append({
         "round": state.round_num,
         "year": state.year,
-        "andrews_profit": andrews.profit_last,
-        "andrews_stock": andrews.stock_price,
-        "andrews_cash": andrews.cash,
-        "andrews_marketcap": andrews.market_cap,
-        "andrews_bsc": bsc.total,
+        "apex_profit": apex.profit_last,
+        "apex_stock": apex.stock_price,
+        "apex_cash": apex.cash,
+        "apex_marketcap": apex.market_cap,
+        "apex_bsc": bsc.total,
     })
 
     return summary
@@ -418,38 +460,38 @@ if __name__ == "__main__":
     from sim.data_models import RoundDecision, ProductDecision, FinanceDecision, HRDecision, TQMDecision
 
     state = build_r0_state()
-    print("=== R1 Test: Andrews makes sensible decisions ===")
+    print("=== R1 Test: Apex makes sensible decisions ===")
 
-    # Andrews R1 decisions:
-    # - Revise Attic (critical: age 5.1)
-    # - Hold Axe (age 2.2, good)
-    # - Revise Art + Ant to track segment drift
+    # Apex R1 decisions:
+    # - Revise Atlas (critical: age 5.1)
+    # - Hold Axiom (age 2.2, good)
+    # - Revise Arc + Aura to track segment drift
     # - Production: aim 150% utilization
     # - Retire 13.5S2027 bond
     # - HR: $2500 + 40hr
     # - TQM: $9M conservative
-    andrews_dec = RoundDecision(
+    apex_dec = RoundDecision(
         round_num=1,
         products=[
             ProductDecision(
-                product_name="Attic",
+                product_name="Atlas",
                 new_pfmn=6.2, new_size=13.8, new_mtbf=20000,
                 price=24.00, promo_budget=1500000, sales_budget=1000000,
                 production_schedule=1700,
             ),
             ProductDecision(
-                product_name="Axe",
+                product_name="Axiom",
                 price=31.00, promo_budget=1500000, sales_budget=1500000,
                 production_schedule=2000,
             ),
             ProductDecision(
-                product_name="Art",
+                product_name="Arc",
                 new_pfmn=10.5, new_size=7.2, new_mtbf=24000,
                 price=38.00, promo_budget=1500000, sales_budget=1500000,
                 production_schedule=1100,
             ),
             ProductDecision(
-                product_name="Ant",
+                product_name="Aura",
                 new_pfmn=12.8, new_size=9.5, new_mtbf=26000,
                 price=40.00, promo_budget=1500000, sales_budget=1500000,
                 production_schedule=1100,
@@ -467,7 +509,7 @@ if __name__ == "__main__":
         }),
     )
 
-    result = advance_round(state, andrews_dec)
+    result = advance_round(state, apex_dec)
     print(f"\nRound {result['round_num']} ({result['year_from']}->{result['year_to']}) complete\n")
     print("Decisions cost summary:")
     for cname, costs in result["decisions_applied"].items():
@@ -478,13 +520,13 @@ if __name__ == "__main__":
     for cname, prod in result["production_summary"].items():
         print(f"  {cname}: produced {prod['units_produced']}, sold {prod['units_sold']}, revenue ${prod['revenue']/1e6:.1f}M")
 
-    print("\nAndrews R1 financials:")
-    andrews = state.get_company("Andrews")
-    print(f"  Cash: ${andrews.cash/1e6:.1f}M")
-    print(f"  Profit: ${andrews.profit_last/1e6:.1f}M (R0 was $20.1M)")
-    print(f"  Stock: ${andrews.stock_price:.2f} (R0 was $95.38)")
-    print(f"  ROS: {andrews.ros*100:.1f}%, ROE: {andrews.roe*100:.1f}%, Leverage: {andrews.leverage:.2f}")
-    print(f"  Rating: {andrews.sp_rating}")
+    print("\nApex R1 financials:")
+    apex = state.get_company("Apex")
+    print(f"  Cash: ${apex.cash/1e6:.1f}M")
+    print(f"  Profit: ${apex.profit_last/1e6:.1f}M (R0 was $20.1M)")
+    print(f"  Stock: ${apex.stock_price:.2f} (R0 was $95.38)")
+    print(f"  ROS: {apex.ros*100:.1f}%, ROE: {apex.roe*100:.1f}%, Leverage: {apex.leverage:.2f}")
+    print(f"  Rating: {apex.sp_rating}")
 
     print(f"\nR1 BSC Score: {result['bsc']['total']:.1f}")
     print(f"  Financial: {result['bsc']['financial']:.1f}")

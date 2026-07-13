@@ -8,32 +8,32 @@ from sim.data_models import (
     RoundDecision, ProductDecision, FinanceDecision, HRDecision, TQMDecision,
 )
 from sim.engines.round_engine import advance_round
-from sim.ai_competitors import baldwin_decisions, chester_decisions, digby_decisions
+from sim.ai_competitors import borealis_decisions, crestline_decisions, dynamo_decisions
 
 
 def _make_simple_decisions(round_num: int = 1) -> RoundDecision:
-    """Sensible Andrews R1 decisions."""
+    """Sensible Apex R1 decisions."""
     return RoundDecision(
         round_num=round_num,
         products=[
             ProductDecision(
-                product_name="Attic",
+                product_name="Atlas",
                 price=24.00, promo_budget=1_500_000, sales_budget=1_000_000,
                 production_schedule=1700,
             ),
             ProductDecision(
-                product_name="Axe",
+                product_name="Axiom",
                 price=31.00, promo_budget=1_500_000, sales_budget=1_500_000,
                 production_schedule=2000,
             ),
             ProductDecision(
-                product_name="Art",
+                product_name="Arc",
                 new_pfmn=10.5, new_size=7.2, new_mtbf=24000,
                 price=38.00, promo_budget=1_500_000, sales_budget=1_500_000,
                 production_schedule=1100,
             ),
             ProductDecision(
-                product_name="Ant",
+                product_name="Aura",
                 price=40.00, promo_budget=1_500_000, sales_budget=1_500_000,
                 production_schedule=1100,
             ),
@@ -51,8 +51,8 @@ def _make_simple_decisions(round_num: int = 1) -> RoundDecision:
 class TestFullRoundAdvance:
     def test_r1_advance_does_not_crash(self):
         state = build_r0_state()
-        andrews_dec = _make_simple_decisions(1)
-        result = advance_round(state, andrews_dec)
+        apex_dec = _make_simple_decisions(1)
+        result = advance_round(state, apex_dec)
         assert result is not None
         assert "round_num" in result
         assert result["round_num"] == 1
@@ -68,7 +68,7 @@ class TestFullRoundAdvance:
     def test_all_companies_have_production(self):
         state = build_r0_state()
         result = advance_round(state, _make_simple_decisions(1))
-        for cname in ["Andrews", "Baldwin", "Chester", "Digby"]:
+        for cname in ["Apex", "Borealis", "Crestline", "Dynamo"]:
             assert cname in result["production_summary"]
             prod = result["production_summary"][cname]
             assert prod["units_produced"] > 0
@@ -96,29 +96,29 @@ class TestFullRoundAdvance:
         assert len(state.history) == 1
         h = state.history[0]
         assert h["round"] == 1
-        assert "andrews_profit" in h
-        assert "andrews_stock" in h
+        assert "apex_profit" in h
+        assert "apex_stock" in h
 
 
 class TestAICompetitors:
-    def test_baldwin_decisions_returns_round_decision(self):
+    def test_borealis_decisions_returns_round_decision(self):
         state = build_r0_state()
-        dec = baldwin_decisions(state)
+        dec = borealis_decisions(state)
         assert dec.round_num == 1
         assert len(dec.products) == 4
-        # Baldwin uses premium pricing
+        # Borealis uses premium pricing
         for pd in dec.products:
             assert pd.price is not None
 
-    def test_chester_decisions_low_price(self):
+    def test_crestline_decisions_low_price(self):
         state = build_r0_state()
-        dec = chester_decisions(state)
-        # Chester uses "low" price strategy -> price near min
+        dec = crestline_decisions(state)
+        # Crestline uses "low" price strategy -> price near min
         for pd in dec.products:
             assert pd.price is not None
 
-    def test_digby_max_hr(self):
+    def test_dynamo_max_hr(self):
         state = build_r0_state()
-        dec = digby_decisions(state)
+        dec = dynamo_decisions(state)
         assert dec.hr.training_hours == 80
         assert dec.hr.recruit_spend == 5000

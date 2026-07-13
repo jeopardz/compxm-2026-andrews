@@ -1,12 +1,12 @@
 """
-Board Queries — Comp-XM 2026 Style Multiple-Choice Questions.
+Board Queries — BizSim 2026 Style Multiple-Choice Questions.
 
 Five sets (one per round, Round 5 = final cumulative).
-Total = 30 questions covering Comp-XM exam topics:
+Total = 30 questions covering business simulation topics:
 financial ratios, marketing/HR costs, contribution margin, bonds,
 stock/equity, working capital, market share, R&D timing, TQM ROI.
 
-Player = Andrews Corporation. Competitors = Baldwin, Chester, Digby.
+Player = Apex Corporation. Competitors = Borealis, Crestline, Dynamo.
 
 Usage:
     from sim.board_queries import (
@@ -32,14 +32,14 @@ from sim.data_models import BoardQueryQuestion
 
 BOARD_QUERIES: List[BoardQueryQuestion] = [
     # ------------------------------------------------------------
-    # ROUND 1 (5 questions) — Basics + R0 Inquirer interpretation
+    # ROUND 1 (5 questions) — Basics + R0 market-report interpretation
     # ------------------------------------------------------------
     BoardQueryQuestion(
         id="R1Q1",
         round_num=1,
         question=(
-            "Andrews ended R0 with Sales of $163.3M and Total Assets of "
-            "$123.5M. What is Andrews' Asset Turnover ratio?"
+            "Apex ended R0 with Sales of $163.3M and Total Assets of "
+            "$123.5M. What is Apex's Asset Turnover ratio?"
         ),
         options=["0.76", "1.32", "1.50", "2.30"],
         correct_index=1,
@@ -54,20 +54,20 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R1Q2",
         round_num=1,
         question=(
-            "Andrews has Total Assets of $123.5M and Equity of $71.1M. "
+            "Apex has Total Assets of $123.5M and Equity of $71.1M. "
             "What is its Leverage ratio, and how should the board interpret it?"
         ),
         options=[
             "0.58 — highly conservative, almost no debt",
-            "1.74 — moderate use of debt, near Comp-XM's BSC sweet spot of 1.8-2.8",
+            "1.74 — moderate use of debt, near BizSim's BSC sweet spot of 1.8-2.8",
             "2.40 — over-leveraged, risk of S&P downgrade",
             "1.00 — perfectly balanced, no debt at all",
         ],
         correct_index=1,
         explanation=(
-            "Leverage = Assets / Equity = 123.5 / 71.1 = 1.74. The Comp-XM "
+            "Leverage = Assets / Equity = 123.5 / 71.1 = 1.74. The BizSim "
             "BSC awards full points for leverage between 1.8 and 2.8 — "
-            "Andrews is just below that band, leaving room to issue debt "
+            "Apex is just below that band, leaving room to issue debt "
             "without S&P concern."
         ),
         topic="Leverage",
@@ -76,8 +76,8 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R1Q3",
         round_num=1,
         question=(
-            "Andrews owns the 13.5S2027 bond with face value $11.3M at "
-            "13.5% coupon. How much interest will Andrews pay on this bond "
+            "Apex owns the 13.5S2027 bond with face value $11.3M at "
+            "13.5% coupon. How much interest will Apex pay on this bond "
             "in R1, and what action should be considered?"
         ),
         options=[
@@ -101,20 +101,20 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R1Q4",
         round_num=1,
         question=(
-            "Compare R0 ROS: Andrews 12.3%, Baldwin 9.2%, Chester 5.7%, "
-            "Digby 8.6%. Which interpretation is MOST accurate?"
+            "Compare R0 ROS: Apex 12.3%, Borealis 9.2%, Crestline 5.7%, "
+            "Dynamo 8.6%. Which interpretation is MOST accurate?"
         ),
         options=[
-            "Chester is most profitable per dollar of sales",
-            "Andrews converts the highest share of revenue into profit; "
-            "Chester's thin margin suggests pricing or cost issues",
+            "Crestline is most profitable per dollar of sales",
+            "Apex converts the highest share of revenue into profit; "
+            "Crestline's thin margin suggests pricing or cost issues",
             "All four are equivalent because they share the same industry",
             "ROS is irrelevant; only absolute profit matters",
         ],
         correct_index=1,
         explanation=(
-            "ROS = Net Profit / Sales measures margin efficiency. Andrews "
-            "(12.3%) is best-in-class; Chester (5.7%) is half that, "
+            "ROS = Net Profit / Sales measures margin efficiency. Apex "
+            "(12.3%) is best-in-class; Crestline (5.7%) is half that, "
             "indicating weak pricing power, high COGS, or bloated SG&A. "
             "ROS lets you compare profitability across firms of different "
             "sizes."
@@ -125,20 +125,20 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R1Q5",
         round_num=1,
         question=(
-            "Andrews' Attic product is in the Thrift segment and is 5.1 "
+            "Apex's Atlas product is in the Thrift segment and is 5.1 "
             "years old. The Thrift segment's IDEAL age is 3.0 years. What "
-            "should Andrews do in R1?"
+            "should Apex do in R1?"
         ),
         options=[
-            "Revise Attic immediately — bring age closer to ideal 3.0 "
+            "Revise Atlas immediately — bring age closer to ideal 3.0 "
             "(revise halves to ~2.5 + drift to ~3.0 by year-end)",
-            "Leave Attic alone — age will continue growing past ideal",
-            "Discontinue Attic and exit the Thrift segment",
-            "Increase Attic's MTBF to match Elite specs",
+            "Leave Atlas alone — age will continue growing past ideal",
+            "Discontinue Atlas and exit the Thrift segment",
+            "Increase Atlas's MTBF to match Elite specs",
         ],
         correct_index=0,
         explanation=(
-            "Thrift segment ideal age = 3.0 years (NOT 7). Attic at 5.1 is "
+            "Thrift segment ideal age = 3.0 years (NOT 7). Atlas at 5.1 is "
             "ALREADY past the ideal and aging further every round. Revising "
             "halves age + drift brings it back to ~3.0 by year-end — perfect "
             "match. Without revise, age becomes 6.1 → 7.1 → ... well past ideal."
@@ -153,7 +153,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R2Q1",
         round_num=2,
         question=(
-            "Andrews R0 EPS is $9.80 and stock price is $95.38. What is "
+            "Apex R0 EPS is $9.80 and stock price is $95.38. What is "
             "the P/E ratio, and what does it signal?"
         ),
         options=[
@@ -166,7 +166,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         correct_index=0,
         explanation=(
             "P/E = Price / EPS = $95.38 / $9.80 = 9.74. A single-digit P/E "
-            "in Comp-XM signals investors expect modest growth — typical "
+            "in BizSim signals investors expect modest growth — typical "
             "for industrial sensors. Driving EPS up while maintaining P/E "
             "is the main lever for stock-price growth (BSC reward)."
         ),
@@ -176,7 +176,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R2Q2",
         round_num=2,
         question=(
-            "Andrews is considering issuing $5M of new common stock at "
+            "Apex is considering issuing $5M of new common stock at "
             "$95 per share. What is the immediate effect on EPS, holding "
             "net profit constant at $20.1M?"
         ),
@@ -201,7 +201,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         question=(
             "Industry guidance suggests Marketing budget (Promo + Sales "
             "for all products) should be 6-8% of sales for full awareness "
-            "and accessibility. With Andrews Sales = $163.3M, what total "
+            "and accessibility. With Apex Sales = $163.3M, what total "
             "marketing budget falls in this band?"
         ),
         options=[
@@ -219,7 +219,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R2Q4",
         round_num=2,
         question=(
-            "Andrews paid a $6.50 dividend per share on 2.05M shares last "
+            "Apex paid a $6.50 dividend per share on 2.05M shares last "
             "year. What was the total dividend payout, and which BSC "
             "perspective does it most affect?"
         ),
@@ -233,7 +233,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         explanation=(
             "Total dividend = $6.50 x 2,050,000 = $13.325M. Dividends "
             "above EPS x ~70% don't help stock price further; below that "
-            "they signal weakness. Andrews' payout ratio = $6.50/$9.80 "
+            "they signal weakness. Apex's payout ratio = $6.50/$9.80 "
             "= 66% — near the sweet spot."
         ),
         topic="Dividend Calculation",
@@ -242,7 +242,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R2Q5",
         round_num=2,
         question=(
-            "Andrews' Axe product sold 1,200,000 units at $34/unit. "
+            "Apex's Axiom product sold 1,200,000 units at $34/unit. "
             "Variable cost is $19/unit. What is the Contribution Margin "
             "percentage and the total contribution dollars?"
         ),
@@ -266,21 +266,21 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R2Q6",
         round_num=2,
         question=(
-            "R0 market caps: Andrews $196M, Baldwin $106M, Chester $114M, "
-            "Digby $115M. Which conclusion best reflects investor sentiment?"
+            "R0 market caps: Apex $196M, Borealis $106M, Crestline $114M, "
+            "Dynamo $115M. Which conclusion best reflects investor sentiment?"
         ),
         options=[
-            "Investors expect Chester to dominate — highest profit",
-            "Andrews is the market leader; Baldwin/Chester/Digby trail by "
+            "Investors expect Crestline to dominate — highest profit",
+            "Apex is the market leader; Borealis/Crestline/Dynamo trail by "
             "roughly 40-45% in equity value",
-            "Baldwin will overtake Andrews this year",
+            "Borealis will overtake Apex this year",
             "Market cap is decorative; cash is what matters",
         ],
         correct_index=1,
         explanation=(
-            "Andrews ($196M) is ~80% larger than the nearest rival. This "
+            "Apex ($196M) is ~80% larger than the nearest rival. This "
             "lead reflects superior ROS (12.3%) plus the $9.80 EPS. The "
-            "Final BSC weighs stock price heavily — Andrews enters the "
+            "Final BSC weighs stock price heavily — Apex enters the "
             "tournament with a cushion but must defend it."
         ),
         topic="Market Cap Comparison",
@@ -293,7 +293,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R3Q1",
         round_num=3,
         question=(
-            "Andrews wants to fund a $20M capacity expansion. Cash is "
+            "Apex wants to fund a $20M capacity expansion. Cash is "
             "$31.5M and leverage is 1.74. Which financing path is best?"
         ),
         options=[
@@ -316,7 +316,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R3Q2",
         round_num=3,
         question=(
-            "Andrews holds $26.1M in inventory and the carry cost rule of "
+            "Apex holds $26.1M in inventory and the carry cost rule of "
             "thumb is 12% per year. What is the annual inventory carry "
             "expense, and how does it hit the P&L?"
         ),
@@ -339,9 +339,9 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R3Q3",
         round_num=3,
         question=(
-            "Andrews' Art (Nano segment) needs a revision moving pfmn from "
-            "8.0 to 9.2 and size from 12.0 to 10.8. Comp-XM's R&D formula "
-            "(simplified): days = 30 + 250 x (distance). Distance ~= 1.7. "
+            "Apex's Arc (Nano segment) needs a revision moving pfmn from "
+            "8.0 to 9.2 and size from 12.0 to 10.8. BizSim's R&D formula "
+            "(simplified): days = max(45, 175 x distance), before automation/concurrency. Distance ~= 1.7. "
             "Roughly how long does R&D take, and should you start NOW?"
         ),
         options=[
@@ -352,8 +352,8 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         ],
         correct_index=1,
         explanation=(
-            "Days ~= 30 + 250 x 1.7 = ~455 days. The project spans more "
-            "than a calendar year, so revenue from the revised Art won't "
+            "Base days ~= max(45, 175 x 1.7) = ~298 days before automation/concurrency. The project may span more "
+            "than a calendar year, so revenue from the revised Arc won't "
             "appear until R4. Start IMMEDIATELY to compress the gap and "
             "use Concurrent Engineering TQM (up to 40% cycle reduction)."
         ),
@@ -364,7 +364,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         round_num=3,
         question=(
             "Working capital = Current Assets - Current Liabilities. "
-            "Andrews has Cash $31.5M + AR $13.4M + Inventory $26.1M, and "
+            "Apex has Cash $31.5M + AR $13.4M + Inventory $26.1M, and "
             "Current Liabilities (AP + Current Debt) of ~$16M. What is "
             "working capital, and what does it indicate?"
         ),
@@ -377,8 +377,8 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         correct_index=0,
         explanation=(
             "WC = ($31.5 + $13.4 + $26.1) - $16.0 = $55.0M. A healthy "
-            "buffer. Comp-XM rewards a current ratio in the 2-4x range; "
-            "Andrews is ~4.4x — slightly cash-heavy. Could pay a special "
+            "buffer. BizSim rewards a current ratio in the 2-4x range; "
+            "Apex is ~4.4x — slightly cash-heavy. Could pay a special "
             "dividend, retire the 13.5% bond early, or fund capacity."
         ),
         topic="Working Capital",
@@ -387,7 +387,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R3Q5",
         round_num=3,
         question=(
-            "Andrews' first-shift workforce wage is $30,427/yr. With 250 "
+            "Apex's first-shift workforce wage is $30,427/yr. With 250 "
             "employees and 60 hours of training/yr at $20/hr, what is the "
             "approximate total training cost?"
         ),
@@ -405,22 +405,22 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R3Q6",
         round_num=3,
         question=(
-            "Mid-game: Andrews ROE has slipped from 28.3% to 22.0% while "
-            "Baldwin ROE rose from 18% to 24%. Which root cause is MOST "
+            "Mid-game: Apex ROE has slipped from 28.3% to 22.0% while "
+            "Borealis ROE rose from 18% to 24%. Which root cause is MOST "
             "likely?"
         ),
         options=[
-            "Andrews raised dividend — that always cuts ROE",
-            "Andrews issued stock, expanding equity faster than profit; "
-            "Baldwin used debt to grow profit on a smaller equity base",
-            "Baldwin's market share fell, so ROE rose",
+            "Apex raised dividend — that always cuts ROE",
+            "Apex issued stock, expanding equity faster than profit; "
+            "Borealis used debt to grow profit on a smaller equity base",
+            "Borealis's market share fell, so ROE rose",
             "ROE differences are random — ignore",
         ],
         correct_index=1,
         explanation=(
             "ROE = Net Profit / Equity. Issuing stock RAISES equity "
             "(denominator), so ROE drops unless profit rises faster. "
-            "Baldwin using leverage keeps equity stable, magnifying ROE "
+            "Borealis using leverage keeps equity stable, magnifying ROE "
             "as profit grows. Lesson: prefer bonds over stock unless "
             "leverage is already above 2.8."
         ),
@@ -434,7 +434,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R4Q1",
         round_num=4,
         question=(
-            "Andrews wants to maximize Final BSC stock price. Current EPS "
+            "Apex wants to maximize Final BSC stock price. Current EPS "
             "is $11.50, dividend $7.00. Which combo is BEST for stock "
             "price growth?"
         ),
@@ -458,7 +458,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R4Q2",
         round_num=4,
         question=(
-            "Production utilization for Andrews' Axe was 165% (heavy "
+            "Production utilization for Apex's Axiom was 165% (heavy "
             "second-shift use). Second-shift labor costs 50% more than "
             "first-shift. What is the smartest R4 production decision?"
         ),
@@ -483,10 +483,10 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R4Q3",
         round_num=4,
         question=(
-            "Andrews has spent $1.5M on CPI Systems and $1.2M on Vendor/"
+            "Apex has spent $1.5M on CPI Systems and $1.2M on Vendor/"
             "JIT (TQM). Maximum cumulative spend per initiative is ~$4M; "
             "max combined material cost reduction is ~11.8%. Marginal "
-            "ROI is sharply diminishing past $3M. Should Andrews keep "
+            "ROI is sharply diminishing past $3M. Should Apex keep "
             "spending in R4?"
         ),
         options=[
@@ -509,16 +509,16 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R4Q4",
         round_num=4,
         question=(
-            "Final-round market share snapshot: Andrews 32% (Core), "
-            "Baldwin 28%, Chester 22%, Digby 18%. Andrews is considering "
-            "a $2 price cut on Axe. Likely effect?"
+            "Final-round market share snapshot: Apex 32% (Core), "
+            "Borealis 28%, Crestline 22%, Dynamo 18%. Apex is considering "
+            "a $2 price cut on Axiom. Likely effect?"
         ),
         options=[
             "Steals 5-8 share points but slashes CM by ~6%; net positive "
             "only if volume grows >20%",
             "Doubles market share instantly",
             "No effect — customers ignore $2 changes",
-            "Hurts Andrews because lower price always means lower revenue",
+            "Hurts Apex because lower price always means lower revenue",
         ],
         correct_index=0,
         explanation=(
@@ -533,9 +533,9 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R4Q5",
         round_num=4,
         question=(
-            "Andrews' 11.2S2032 bond ($8.8M, 11.2%) was issued when prime "
+            "Apex's 11.2S2032 bond ($8.8M, 11.2%) was issued when prime "
             "was ~10%. Current prime is 7.5%. Cost to retire early is "
-            "1.5% of face = $132K. Should Andrews refinance now?"
+            "1.5% of face = $132K. Should Apex refinance now?"
         ),
         options=[
             "No — pay the bond on schedule",
@@ -558,8 +558,8 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R4Q6",
         round_num=4,
         question=(
-            "Andrews' cumulative profit after R4 is $98M; Baldwin $61M, "
-            "Chester $48M, Digby $58M. Andrews leads. The Final BSC also "
+            "Apex's cumulative profit after R4 is $98M; Borealis $61M, "
+            "Crestline $48M, Dynamo $58M. Apex leads. The Final BSC also "
             "weights last-year metrics. To LOCK in the win in R5, what "
             "matters MOST?"
         ),
@@ -572,7 +572,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         ],
         correct_index=1,
         explanation=(
-            "Comp-XM Final BSC heavily weights R5-specific scores — "
+            "BizSim Final BSC heavily weights R5-specific scores — "
             "stock price, ROE, ROS, market share, contribution margin, "
             "plant utilization, employee productivity, customer survey. "
             "A poor R5 can wipe out earlier lead. Treat R5 like the "
@@ -588,15 +588,15 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R5Q1",
         round_num=5,
         question=(
-            "Final R5 results — Andrews: Sales $245M, Net Profit $34M, "
-            "Equity $112M. What is Andrews' R5 ROE?"
+            "Final R5 results — Apex: Sales $245M, Net Profit $34M, "
+            "Equity $112M. What is Apex's R5 ROE?"
         ),
         options=["13.9%", "23.6%", "30.4%", "45.8%"],
         correct_index=2,
         explanation=(
-            "ROE = Net Profit / Equity = $34M / $112M = 30.4%. Comp-XM "
+            "ROE = Net Profit / Equity = $34M / $112M = 30.4%. BizSim "
             "BSC awards full ROE points for >18% in the final year. "
-            "Andrews crushed it."
+            "Apex crushed it."
         ),
         topic="Final ROE",
     ),
@@ -604,19 +604,19 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R5Q2",
         round_num=5,
         question=(
-            "Cumulative profit across R1-R5: Andrews $145M, Baldwin $92M, "
-            "Chester $71M, Digby $88M. Which company is the clear winner "
+            "Cumulative profit across R1-R5: Apex $145M, Borealis $92M, "
+            "Crestline $71M, Dynamo $88M. Which company is the clear winner "
             "on this metric, and how big is the lead?"
         ),
         options=[
-            "Andrews — leads Baldwin (#2) by $53M (~58% margin)",
-            "Baldwin — close second, almost tied",
-            "Chester — high market share offsets low profit",
-            "Digby — best ROS",
+            "Apex — leads Borealis (#2) by $53M (~58% margin)",
+            "Borealis — close second, almost tied",
+            "Crestline — high market share offsets low profit",
+            "Dynamo — best ROS",
         ],
         correct_index=0,
         explanation=(
-            "Andrews $145M vs Baldwin $92M = $53M lead = 57.6% more "
+            "Apex $145M vs Borealis $92M = $53M lead = 57.6% more "
             "cumulative profit. Cumulative profit is one of the Final "
             "BSC's biggest weights (~30 points). A 50%+ margin is "
             "decisive."
@@ -627,24 +627,24 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R5Q3",
         round_num=5,
         question=(
-            "Final stock prices: Andrews $158, Baldwin $98, Chester $76, "
-            "Digby $89. What does this ranking reveal about how the "
+            "Final stock prices: Apex $158, Borealis $98, Crestline $76, "
+            "Dynamo $89. What does this ranking reveal about how the "
             "market viewed each firm's 5-year run?"
         ),
         options=[
-            "Andrews delivered the best mix of EPS growth, dividend "
-            "discipline, and leverage; Chester's slide reflects weak "
+            "Apex delivered the best mix of EPS growth, dividend "
+            "discipline, and leverage; Crestline's slide reflects weak "
             "margins compounding for 5 years",
-            "Stock prices are random in Comp-XM",
-            "Baldwin is undervalued — bigger market cap than Andrews",
-            "Chester won because lowest stock price means cheapest entry",
+            "Stock prices are random in BizSim",
+            "Borealis is undervalued — bigger market cap than Apex",
+            "Crestline won because lowest stock price means cheapest entry",
         ],
         correct_index=0,
         explanation=(
             "Stock price = EPS x P/E + dividend signal - debt penalty. "
-            "Andrews' lead reflects 5 years of compounding strong ROS, "
+            "Apex's lead reflects 5 years of compounding strong ROS, "
             "controlled dilution, and dividends near 65% of EPS. "
-            "Chester's $76 reflects 5 years of weak ROS and low EPS."
+            "Crestline's $76 reflects 5 years of weak ROS and low EPS."
         ),
         topic="Final Stock Price",
     ),
@@ -652,7 +652,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R5Q4",
         round_num=5,
         question=(
-            "Andrews' Total BSC over R1-R5 (cumulative + final): 742/1000. "
+            "Apex's Total BSC over R1-R5 (cumulative + final): 742/1000. "
             "Top quartile is typically >700, top decile >780. How should "
             "this be characterized to the board?"
         ),
@@ -665,7 +665,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         ],
         correct_index=1,
         explanation=(
-            "Comp-XM grading: 600-700 average, 700-780 top quartile, "
+            "BizSim grading: 600-700 average, 700-780 top quartile, "
             "780+ elite. 742 is a clear top-quartile finish — strong "
             "execution. Drill into the lowest-scoring perspective "
             "(usually Internal Business or Learning & Growth) for "
@@ -677,7 +677,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R5Q5",
         round_num=5,
         question=(
-            "Andrews' Attic (Thrift, now age 8.2) sold 1.5M units at $22, "
+            "Apex's Atlas (Thrift, now age 8.2) sold 1.5M units at $22, "
             "VC $11. Contribution dollars and CM%?"
         ),
         options=[
@@ -699,7 +699,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         id="R5Q6",
         round_num=5,
         question=(
-            "Andrews' R5 Total Assets $185M, Sales $245M, leverage 2.1, "
+            "Apex's R5 Total Assets $185M, Sales $245M, leverage 2.1, "
             "ROE 30.4%. DuPont decomposition: which component contributed "
             "MOST to ROE growth vs R0?"
         ),
@@ -724,7 +724,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         round_num=5,
         question=(
             "Reflecting on the 5-year run: which single strategic decision "
-            "had the LARGEST positive impact on Andrews' final stock price "
+            "had the LARGEST positive impact on Apex's final stock price "
             "and Total BSC?"
         ),
         options=[

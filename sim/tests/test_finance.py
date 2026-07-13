@@ -31,18 +31,18 @@ def state():
 
 class TestCreditRating:
     def test_rating_brackets(self):
-        # Calibrated so real R0 companies match the Inquirer S&P (BB/BB/B/B).
+        # Calibrated so real R0 companies match the Market Report S&P (BB/BB/B/B).
         assert calculate_credit_rating(1.0) == "AAA"
         assert calculate_credit_rating(1.4) == "A"
-        assert calculate_credit_rating(1.74) == "BB"   # Andrews R0
-        assert calculate_credit_rating(1.90) == "BB"   # Baldwin R0
-        assert calculate_credit_rating(2.53) == "B"    # Digby R0
-        assert calculate_credit_rating(2.66) == "B"    # Chester R0
-        assert calculate_credit_rating(10.0) == "D"
+        assert calculate_credit_rating(1.74) == "BB"   # Apex R0
+        assert calculate_credit_rating(1.90) == "BB"   # Borealis R0
+        assert calculate_credit_rating(2.53) == "B"    # Dynamo R0
+        assert calculate_credit_rating(2.66) == "B"    # Crestline R0
+        assert calculate_credit_rating(10.0) == "DDD"  # worst tier
 
     def test_higher_leverage_lower_rating(self):
         # Rating must be monotonically non-increasing as leverage rises.
-        order = ["AAA", "AA", "A", "BBB", "BB", "B", "CCC", "CC", "C", "D"]
+        order = ["AAA", "AA", "A", "BBB", "BB", "B", "CCC", "CC", "C", "DDD"]
         rank = {r: i for i, r in enumerate(order)}
         prev = -1
         for lev in [1.0, 1.3, 1.5, 1.7, 2.1, 2.8, 3.5, 4.2, 5.0, 7.0]:
@@ -52,9 +52,9 @@ class TestCreditRating:
 
 
 class TestComputeRatios:
-    def test_andrews_r0_ratios(self, state):
-        andrews = state.get_company("Andrews")
-        ratios = compute_ratios(andrews)
+    def test_apex_r0_ratios(self, state):
+        apex = state.get_company("Apex")
+        ratios = compute_ratios(apex)
         # ROS 12.3%
         assert ratios["ROS"] == pytest.approx(0.123, abs=0.01)
         # ROE 28.3%
@@ -66,10 +66,10 @@ class TestComputeRatios:
 
 
 class TestBondCapacity:
-    def test_max_bond_capacity_andrews_50M(self, state):
+    def test_max_bond_capacity_apex_50M(self, state):
         """Plant $96.8M * 80% - current bonds $27.2M = ~$50.3M."""
-        andrews = state.get_company("Andrews")
-        cap = max_new_bond_capacity(andrews)
+        apex = state.get_company("Apex")
+        cap = max_new_bond_capacity(apex)
         # 96,824,000 * 0.80 - 27,209,000 = 77,459,200 - 27,209,000 = 50,250,200
         assert cap == pytest.approx(50_250_200, abs=10_000)
 
@@ -79,46 +79,47 @@ class TestBondCapacity:
 
 class TestBondIssueAndRetire:
     def test_issue_bond_charges_5pct_fee(self, state):
-        andrews = state.get_company("Andrews")
-        cash_before = andrews.cash
-        n_bonds_before = len(andrews.bonds)
-        result = issue_bond(andrews, 10_000_000, state.prime_interest_rate, 2026)
+        apex = state.get_company("Apex")
+        cash_before = apex.cash
+        n_bonds_before = len(apex.bonds)
+        result = issue_bond(apex, 10_000_000, state.prime_interest_rate, 2026)
         # 5% fee
         assert result["fee"] == pytest.approx(10_000_000 * BOND_BROKERAGE_FEE)
         assert result["net_proceeds"] == pytest.approx(10_000_000 * 0.95)
         # New bond added
-        assert len(andrews.bonds) == n_bonds_before + 1
-        # Cash up by net proceeds
-        assert andrews.cash == pytest.approx(cash_before + result["net_proceeds"])
+        assert len(apex.bonds) == n_bonds_before + 1
+        # Gross proceeds arrive immediately; the fee is posted through Other by the
+        # round engine so it also reduces retained earnings and keeps A=L+E.
+        assert apex.cash == pytest.approx(cash_before + result["issued"])
 
     def test_issue_bond_capped_at_capacity(self, state):
-        andrews = state.get_company("Andrews")
-        cap = max_new_bond_capacity(andrews)
+        apex = state.get_company("Apex")
+        cap = max_new_bond_capacity(apex)
         # Request way more than cap
-        result = issue_bond(andrews, cap * 2, state.prime_interest_rate, 2026)
+        result = issue_bond(apex, cap * 2, state.prime_interest_rate, 2026)
         assert result["issued"] <= cap + 1  # allow tiny rounding
 
     def test_retire_bond_early_fee(self, state):
-        andrews = state.get_company("Andrews")
-        bond = andrews.bonds[0]
+        apex = state.get_company("Apex")
+        bond = apex.bonds[0]
         face = bond.face_value
-        cash_before = andrews.cash
-        result = retire_bond_early(andrews, bond.series)
+        cash_before = apex.cash
+        result = retire_bond_early(apex, bond.series)
         # Fee is 1.5% of face
         assert result["fee"] == pytest.approx(face * EARLY_RETIRE_FEE)
         # Bond removed
-        assert bond not in andrews.bonds
+        assert bond not in apex.bonds
         # Cash decreased
-        assert andrews.cash < cash_before
+        assert apex.cash < cash_before
 
 
 class TestStockPrice:
     def test_update_stock_price_returns_positive(self, state):
-        andrews = state.get_company("Andrews")
-        price = update_stock_price(andrews)
+        apex = state.get_company("Apex")
+        price = update_stock_price(apex)
         assert price > 0
         # Market cap recalculated
-        assert andrews.market_cap == pytest.approx(price * andrews.shares_outstanding)
+        assert apex.market_cap == pytest.approx(price * apex.shares_outstanding)
 
 
 class TestInterestRates:
@@ -140,23 +141,23 @@ class TestInterestRates:
 
 class TestIncomeStatement:
     def test_total_bond_interest_positive(self, state):
-        andrews = state.get_company("Andrews")
-        interest = total_bond_interest(andrews)
+        apex = state.get_company("Apex")
+        interest = total_bond_interest(apex)
         # Sum coupons * face
-        expected = sum(b.face_value * b.coupon_rate for b in andrews.bonds)
+        expected = sum(b.face_value * b.coupon_rate for b in apex.bonds)
         assert interest == pytest.approx(expected)
 
     def test_income_statement_returns_keys(self, state):
-        andrews = state.get_company("Andrews")
-        is_dict = income_statement(andrews, 2026, state.prime_interest_rate)
+        apex = state.get_company("Apex")
+        is_dict = income_statement(apex, 2026, state.prime_interest_rate)
         for key in ["sales", "variable_total", "contribution_margin", "ebit",
                     "pretax_income", "taxes", "net_profit"]:
             assert key in is_dict
 
     def test_income_statement_taxes_35pct(self, state):
         # Set up a clean company with known sales
-        andrews = state.get_company("Andrews")
+        apex = state.get_company("Apex")
         # Make sure we can compute taxes; if pretax positive, taxes = 35%
-        is_dict = income_statement(andrews, 2026, state.prime_interest_rate)
+        is_dict = income_statement(apex, 2026, state.prime_interest_rate)
         if is_dict["pretax_income"] > 0:
             assert is_dict["taxes"] == pytest.approx(is_dict["pretax_income"] * TAX_RATE, rel=0.01)

@@ -1,112 +1,28 @@
-# Deploy Comp-XM Simulator
+# Deploy BizSim on Railway
 
-## Option 1: Streamlit Community Cloud (Recommended — FREE)
+## Required configuration
 
-### Prerequisites
-- GitHub account (free at github.com)
-- Streamlit Cloud account (free at share.streamlit.io)
+Apply every SQL migration in `supabase/migrations/` in numeric order, then deploy
+`supabase/functions/ls-webhook/index.ts` with JWT verification disabled. Configure:
 
-### Steps
+- App variables: `AUTH_ENABLED=true`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+  `LEMONSQUEEZY_CHECKOUT_URL`.
+- Edge Function secrets: `LS_SIGNING_SECRET`, `LS_STORE_ID`, `LS_VARIANT_IDS`,
+  `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-1. **Create GitHub repo**
-   ```powershell
-   cd "F:\Claude CODE\CAPSIM"
-   git init
-   git add sim/ requirements.txt .streamlit/ .gitignore DEPLOY.md
-   git commit -m "Initial commit: Comp-XM 2026 simulator"
-   ```
+`LS_VARIANT_IDS` is a comma-separated allowlist of paid BizSim variant IDs. Never
+put the service-role key or signing secret in Streamlit secrets or source control.
 
-2. **Create repo on GitHub** (web):
-   - Go to https://github.com/new
-   - Name: `compxm-sim` (or whatever)
-   - Public or Private (both work)
-   - Don't initialize with README
+## Railway
 
-3. **Push to GitHub**
-   ```powershell
-   git remote add origin https://github.com/YOUR_USERNAME/compxm-sim.git
-   git branch -M main
-   git push -u origin main
-   ```
+Connect the repository to Railway. The checked-in `railway.json` installs the root
+`requirements.txt`, starts Streamlit on `$PORT`, and uses `/_stcore/health` for the
+health check. Add the app variables above in Railway, deploy, then set the public
+domain as the Lemon Squeezy checkout return URL.
 
-4. **Deploy on Streamlit Cloud**:
-   - Go to https://share.streamlit.io
-   - Sign in with GitHub
-   - Click "New app"
-   - Repository: `YOUR_USERNAME/compxm-sim`
-   - Branch: `main`
-   - Main file path: `sim/app.py`
-   - App URL (custom subdomain): `compxm-andrews` (or whatever)
-   - Click **Deploy**
+## Release check
 
-5. **Wait ~3 minutes** while Streamlit installs deps and starts the app.
-
-6. **Done!** Your URL will be `https://compxm-andrews.streamlit.app`
-   - Share with anyone — they just open the URL
-   - Auto-redeploys when you `git push` updates
-
----
-
-## Option 2: ngrok (Quick share, your PC stays on)
-
-If you don't want to deploy to cloud and just want to share temporarily:
-
-1. **Download ngrok**: https://ngrok.com/download
-2. **Sign up** (free) and get authtoken
-3. **Setup**:
-   ```powershell
-   ngrok config add-authtoken YOUR_TOKEN
-   ```
-4. **Run your Streamlit locally** (port 8501)
-5. **Expose**:
-   ```powershell
-   ngrok http 8501
-   ```
-6. Share the `https://xxxxx.ngrok.io` URL — anyone can use it
-
-**Pros**: Fast (no GitHub needed), no upload
-**Cons**: Your PC must be ON; URL changes each session (paid plan = fixed URL)
-
----
-
-## Option 3: Hugging Face Spaces (FREE alternative)
-
-1. Sign up at https://huggingface.co
-2. Create new Space → Streamlit template
-3. Upload your files via web or git
-4. Auto-deploys, get URL like `https://yourname-compxm.hf.space`
-
-Free, no sleep, but slightly more setup than Streamlit Cloud.
-
----
-
-## Option 4: Docker (advanced — for company servers)
-
-Build a Docker image:
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt
-EXPOSE 8501
-CMD ["streamlit", "run", "sim/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-```
-
-Run anywhere with Docker installed:
-```bash
-docker build -t compxm-sim .
-docker run -p 8501:8501 compxm-sim
-```
-
----
-
-## Comparison
-
-| Option | "No install for user?" | Setup time | Cost | URL stays? |
-|---|---|---|---|---|
-| **Streamlit Cloud** | ✅ YES | 10 min | Free | ✅ Permanent |
-| **ngrok** | ✅ YES | 5 min | Free (URL changes) | ❌ Temp |
-| **Hugging Face** | ✅ YES | 15 min | Free | ✅ Permanent |
-| **Docker** | ❌ Need Docker | 20 min | Varies | Depends |
-
-**Recommendation**: Streamlit Cloud for permanent sharing, ngrok for one-off demos.
+Run `python -m pytest sim/tests -q`, create two separate browser sessions, verify
+their games never cross, and complete one Lemon Squeezy test purchase. Re-send the
+same webhook and confirm it creates neither a second payment nor a second 30-day
+grant. Revoke temporary Supabase deploy tokens before launch.

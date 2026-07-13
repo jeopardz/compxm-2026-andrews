@@ -1,13 +1,13 @@
 """
 Production engine.
 
-CAPSIM UNIT CONVENTION (IMPORTANT):
+BIZSIM UNIT CONVENTION (IMPORTANT):
   - `units`, `capacity`, `inventory`, `production_schedule` are integers in THOUSANDS of units.
     e.g., capacity_first_shift=1130 means 1,130,000 units of capacity.
   - `price`, `material_cost`, `labor_cost` are in DOLLARS per ACTUAL unit.
   - Revenue = units(thousands) * price($/unit) = $thousands -> multiply by 1000 for full $.
 
-Per Capsim:
+Per BizSim:
   - Plant capacity cost = $6 (base) + $4 × automation_level per 1000-unit of 1st-shift cap.
     For 1130 capacity (1.13M units): cost = 1130 × ($6 + $4×6) × 1000 = $33.9M
   - 1st shift labor = base labor cost × productivity_index
@@ -16,9 +16,9 @@ Per Capsim:
     level 10 = ~10% labor)
   - Maximum 200% utilization (1 shift = 100%, 2 shifts = 200%)
   - Plant depreciation: 15-year straight line
-  - Inventory carry cost: 12% of cost per year on average inventory
+  - Inventory carry cost: 12% of cost per year on ending inventory
 
-Reference: Capstone User Guide §4.3 Production
+Reference: business-simulation production rules
 """
 from __future__ import annotations
 from typing import Dict
@@ -32,6 +32,24 @@ SECOND_SHIFT_LABOR_MULTIPLIER = 1.5
 INVENTORY_CARRY_PCT = 0.12              # of unit cost per year
 DEPRECIATION_YEARS = 15
 MAX_UTILIZATION = 2.0                   # 200% = 2 shifts
+WAGE_INFLATION_RATE = 0.05             # per-unit labor cost rises ~5%/yr regardless of
+                                        # automation (contractual annual wage increase)
+
+
+def material_availability(ap_days: int) -> float:
+    """Fraction of scheduled production suppliers will actually support, given accounts-
+    payable terms. Stretching AP past ~60 days makes vendors withhold material and starve
+    the line: 30d→0.99, 60d→0.92, 90d→0.74, 120d→0.37, 140d→0.0. Interpolated."""
+    pts = [(30, 0.99), (60, 0.92), (90, 0.74), (120, 0.37), (140, 0.0)]
+    if ap_days <= pts[0][0]:
+        return pts[0][1]
+    if ap_days >= pts[-1][0]:
+        return pts[-1][1]
+    for (d0, r0), (d1, r1) in zip(pts, pts[1:]):
+        if d0 <= ap_days <= d1:
+            t = (ap_days - d0) / (d1 - d0)
+            return r0 + (r1 - r0) * t
+    return 1.0
 
 
 def labor_cost_factor(automation: float, productivity_index: float = 1.0) -> float:
@@ -56,22 +74,37 @@ def compute_unit_labor(base_labor: float, automation: float, productivity_index:
 def capacity_purchase_cost(units_thousands: int, automation: float) -> float:
     """
     Cost in DOLLARS to buy `units_thousands` of 1st-shift capacity at given automation.
-    units_thousands = capacity in 1000s (matching Inquirer convention).
+    units_thousands = capacity in 1000s (matching Market Report convention).
     """
     return units_thousands * (BASE_CAPACITY_COST_PER_UNIT + AUTOMATION_COST_PER_LEVEL * automation) * 1000
 
 
 def automation_upgrade_cost(units_thousands: int, old_auto: float, new_auto: float) -> float:
-    """Cost in DOLLARS to upgrade automation from old to new level."""
-    if new_auto <= old_auto:
-        return 0.0
-    return units_thousands * AUTOMATION_COST_PER_LEVEL * (new_auto - old_auto) * 1000
+    """Cost in DOLLARS to change automation from old to new level.
+
+    BizSim charges the $4/point/unit retooling cost for changes in either
+    direction — lowering automation is a real (retooling) expense too, not free.
+    (Was: return 0 for downgrades, which let a company drop automation for faster
+    R&D at no cost — not authentic.)
+    """
+    return units_thousands * AUTOMATION_COST_PER_LEVEL * abs(new_auto - old_auto) * 1000
 
 
-def capacity_sell_value(units_thousands: int, automation: float, depreciation_pct: float = 0.30) -> float:
-    """Dollars received from selling capacity (default 30% of original cost)."""
+# Selling capacity recovers $0.65 per original dollar invested (simulation rule
+# Guide). Was 0.30, which under-refunded a downsizing company by ~$0.35/dollar and
+# made capacity sales far more punishing than the authentic game.
+CAPACITY_SELL_RECOVERY_PCT = 0.65
+
+
+def capacity_sell_value(units_thousands: int, automation: float,
+                        recovery_pct: float = CAPACITY_SELL_RECOVERY_PCT) -> float:
+    """Dollars received from selling capacity: $0.65 per original dollar invested.
+
+    Note: this is proceeds against ORIGINAL cost. If the plant has depreciated below
+    65% of original value, selling at 0.65 yields a book gain (a negative write-off);
+    the round engine reconciles accumulated depreciation separately."""
     original_cost = capacity_purchase_cost(units_thousands, automation)
-    return original_cost * depreciation_pct
+    return original_cost * recovery_pct
 
 
 def plant_value(product: Product) -> float:
@@ -151,9 +184,9 @@ def company_production_summary(company: Company) -> Dict:
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()
-    andrews = state.get_company("Andrews")
-    print("=== Andrews R0 production analysis ===")
-    for p in andrews.products:
+    apex = state.get_company("Apex")
+    print("=== Apex R0 production analysis ===")
+    for p in apex.products:
         # Simulate producing at 150% utilization
         target = int(p.capacity_first_shift * 1.5)
         sched = schedule_production(p, target)
@@ -164,5 +197,5 @@ if __name__ == "__main__":
         print(f"  Total labor ${sched['total_labor_cost']/1000:.0f}K + material ${sched['total_material_cost']/1000:.0f}K")
 
     # Plant value check
-    total_plant = sum(plant_value(p) for p in andrews.products)
-    print(f"\nAndrews total plant value: ${total_plant/1e6:.1f}M (Inquirer says $96.8M)")
+    total_plant = sum(plant_value(p) for p in apex.products)
+    print(f"\nApex total plant value: ${total_plant/1e6:.1f}M (Market Report says $96.8M)")

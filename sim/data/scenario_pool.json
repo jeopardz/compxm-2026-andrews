@@ -1,0 +1,554 @@
+{
+  "scenarios": [
+    {
+      "id": "gen-1-easy",
+      "seed": 1,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 83.6,
+      "final_stock": 167.09,
+      "cumulative_profit": 128466304.0
+    },
+    {
+      "id": "gen-3-easy",
+      "seed": 3,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.9,
+      "final_stock": 166.67,
+      "cumulative_profit": 130376620.0
+    },
+    {
+      "id": "gen-4-easy",
+      "seed": 4,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.6,
+      "final_stock": 160.69,
+      "cumulative_profit": 126695792.0
+    },
+    {
+      "id": "gen-5-easy",
+      "seed": 5,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 82.3,
+      "final_stock": 166.66,
+      "cumulative_profit": 128437444.0
+    },
+    {
+      "id": "gen-6-easy",
+      "seed": 6,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 83.1,
+      "final_stock": 160.71,
+      "cumulative_profit": 124978473.0
+    },
+    {
+      "id": "gen-7-easy",
+      "seed": 7,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 85.3,
+      "final_stock": 169.13,
+      "cumulative_profit": 129565416.0
+    },
+    {
+      "id": "gen-9-easy",
+      "seed": 9,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.4,
+      "final_stock": 168.45,
+      "cumulative_profit": 130946581.0
+    },
+    {
+      "id": "gen-14-easy",
+      "seed": 14,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 82.6,
+      "final_stock": 171.39,
+      "cumulative_profit": 130980383.0
+    },
+    {
+      "id": "gen-15-easy",
+      "seed": 15,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.8,
+      "final_stock": 169.21,
+      "cumulative_profit": 128840452.0
+    },
+    {
+      "id": "gen-16-easy",
+      "seed": 16,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.4,
+      "final_stock": 164.17,
+      "cumulative_profit": 126397510.0
+    },
+    {
+      "id": "gen-17-easy",
+      "seed": 17,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.2,
+      "final_stock": 167.42,
+      "cumulative_profit": 129276128.0
+    },
+    {
+      "id": "gen-18-easy",
+      "seed": 18,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.5,
+      "final_stock": 166.14,
+      "cumulative_profit": 130805944.0
+    },
+    {
+      "id": "gen-19-easy",
+      "seed": 19,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.3,
+      "final_stock": 166.51,
+      "cumulative_profit": 129084578.0
+    },
+    {
+      "id": "gen-21-easy",
+      "seed": 21,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 83.1,
+      "final_stock": 162.87,
+      "cumulative_profit": 123965468.0
+    },
+    {
+      "id": "gen-22-easy",
+      "seed": 22,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 85.1,
+      "final_stock": 170.15,
+      "cumulative_profit": 128541787.0
+    },
+    {
+      "id": "gen-23-easy",
+      "seed": 23,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 83.3,
+      "final_stock": 163.15,
+      "cumulative_profit": 126006248.0
+    },
+    {
+      "id": "gen-24-easy",
+      "seed": 24,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 83.2,
+      "final_stock": 173.14,
+      "cumulative_profit": 133130130.0
+    },
+    {
+      "id": "gen-25-easy",
+      "seed": 25,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.0,
+      "final_stock": 172.49,
+      "cumulative_profit": 137020625.0
+    },
+    {
+      "id": "gen-26-easy",
+      "seed": 26,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 84.6,
+      "final_stock": 157.16,
+      "cumulative_profit": 127160574.0
+    },
+    {
+      "id": "gen-27-easy",
+      "seed": 27,
+      "target_difficulty": "easy",
+      "difficulty": "Easy",
+      "avg_bsc": 83.9,
+      "final_stock": 172.64,
+      "cumulative_profit": 133184494.0
+    },
+    {
+      "id": "gen-2-normal",
+      "seed": 2,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.0,
+      "final_stock": 132.75,
+      "cumulative_profit": 99863348.0
+    },
+    {
+      "id": "gen-3-normal",
+      "seed": 3,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.8,
+      "final_stock": 136.68,
+      "cumulative_profit": 105807401.0
+    },
+    {
+      "id": "gen-4-normal",
+      "seed": 4,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.6,
+      "final_stock": 129.19,
+      "cumulative_profit": 100832022.0
+    },
+    {
+      "id": "gen-5-normal",
+      "seed": 5,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 82.7,
+      "final_stock": 136.17,
+      "cumulative_profit": 103493643.0
+    },
+    {
+      "id": "gen-6-normal",
+      "seed": 6,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.0,
+      "final_stock": 141.2,
+      "cumulative_profit": 105810682.0
+    },
+    {
+      "id": "gen-7-normal",
+      "seed": 7,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 86.0,
+      "final_stock": 139.43,
+      "cumulative_profit": 104676992.0
+    },
+    {
+      "id": "gen-8-easy",
+      "seed": 8,
+      "target_difficulty": "easy",
+      "difficulty": "Normal",
+      "avg_bsc": 83.0,
+      "final_stock": 151.51,
+      "cumulative_profit": 116803042.0
+    },
+    {
+      "id": "gen-8-normal",
+      "seed": 8,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 84.4,
+      "final_stock": 128.38,
+      "cumulative_profit": 94571712.0
+    },
+    {
+      "id": "gen-9-normal",
+      "seed": 9,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 87.0,
+      "final_stock": 133.24,
+      "cumulative_profit": 99415792.0
+    },
+    {
+      "id": "gen-10-easy",
+      "seed": 10,
+      "target_difficulty": "easy",
+      "difficulty": "Normal",
+      "avg_bsc": 83.7,
+      "final_stock": 137.63,
+      "cumulative_profit": 109985264.0
+    },
+    {
+      "id": "gen-11-easy",
+      "seed": 11,
+      "target_difficulty": "easy",
+      "difficulty": "Normal",
+      "avg_bsc": 83.5,
+      "final_stock": 142.73,
+      "cumulative_profit": 108400296.0
+    },
+    {
+      "id": "gen-12-normal",
+      "seed": 12,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.4,
+      "final_stock": 146.45,
+      "cumulative_profit": 111527215.0
+    },
+    {
+      "id": "gen-14-normal",
+      "seed": 14,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 83.5,
+      "final_stock": 142.45,
+      "cumulative_profit": 107683532.0
+    },
+    {
+      "id": "gen-15-normal",
+      "seed": 15,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.9,
+      "final_stock": 143.42,
+      "cumulative_profit": 105649017.0
+    },
+    {
+      "id": "gen-16-normal",
+      "seed": 16,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 86.0,
+      "final_stock": 132.76,
+      "cumulative_profit": 100756376.0
+    },
+    {
+      "id": "gen-17-normal",
+      "seed": 17,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 84.9,
+      "final_stock": 138.15,
+      "cumulative_profit": 105836156.0
+    },
+    {
+      "id": "gen-18-normal",
+      "seed": 18,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.4,
+      "final_stock": 134.81,
+      "cumulative_profit": 105941641.0
+    },
+    {
+      "id": "gen-19-normal",
+      "seed": 19,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 85.4,
+      "final_stock": 133.51,
+      "cumulative_profit": 102504839.0
+    },
+    {
+      "id": "gen-20-easy",
+      "seed": 20,
+      "target_difficulty": "easy",
+      "difficulty": "Normal",
+      "avg_bsc": 83.5,
+      "final_stock": 143.51,
+      "cumulative_profit": 112695837.0
+    },
+    {
+      "id": "gen-21-normal",
+      "seed": 21,
+      "target_difficulty": "normal",
+      "difficulty": "Normal",
+      "avg_bsc": 83.4,
+      "final_stock": 128.08,
+      "cumulative_profit": 92930023.0
+    },
+    {
+      "id": "gen-1-normal",
+      "seed": 1,
+      "target_difficulty": "normal",
+      "difficulty": "Hard",
+      "avg_bsc": 83.1,
+      "final_stock": 110.49,
+      "cumulative_profit": 82788620.0
+    },
+    {
+      "id": "gen-2-hard",
+      "seed": 2,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 84.2,
+      "final_stock": 118.88,
+      "cumulative_profit": 86085734.0
+    },
+    {
+      "id": "gen-3-hard",
+      "seed": 3,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 84.9,
+      "final_stock": 107.16,
+      "cumulative_profit": 81308073.0
+    },
+    {
+      "id": "gen-4-hard",
+      "seed": 4,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 85.2,
+      "final_stock": 102.02,
+      "cumulative_profit": 76266967.0
+    },
+    {
+      "id": "gen-5-hard",
+      "seed": 5,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 84.0,
+      "final_stock": 111.48,
+      "cumulative_profit": 86106597.0
+    },
+    {
+      "id": "gen-6-hard",
+      "seed": 6,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 84.9,
+      "final_stock": 120.15,
+      "cumulative_profit": 87480714.0
+    },
+    {
+      "id": "gen-7-hard",
+      "seed": 7,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 84.9,
+      "final_stock": 107.78,
+      "cumulative_profit": 77379014.0
+    },
+    {
+      "id": "gen-8-hard",
+      "seed": 8,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 85.0,
+      "final_stock": 112.41,
+      "cumulative_profit": 82378909.0
+    },
+    {
+      "id": "gen-9-hard",
+      "seed": 9,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 85.5,
+      "final_stock": 111.49,
+      "cumulative_profit": 81876443.0
+    },
+    {
+      "id": "gen-10-normal",
+      "seed": 10,
+      "target_difficulty": "normal",
+      "difficulty": "Hard",
+      "avg_bsc": 84.9,
+      "final_stock": 117.3,
+      "cumulative_profit": 90089426.0
+    },
+    {
+      "id": "gen-10-hard",
+      "seed": 10,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 83.6,
+      "final_stock": 97.82,
+      "cumulative_profit": 74819639.0
+    },
+    {
+      "id": "gen-11-normal",
+      "seed": 11,
+      "target_difficulty": "normal",
+      "difficulty": "Hard",
+      "avg_bsc": 84.3,
+      "final_stock": 124.12,
+      "cumulative_profit": 92253358.0
+    },
+    {
+      "id": "gen-11-hard",
+      "seed": 11,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 83.3,
+      "final_stock": 103.76,
+      "cumulative_profit": 76105697.0
+    },
+    {
+      "id": "gen-12-hard",
+      "seed": 12,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 85.4,
+      "final_stock": 112.51,
+      "cumulative_profit": 82330990.0
+    },
+    {
+      "id": "gen-13-easy",
+      "seed": 13,
+      "target_difficulty": "easy",
+      "difficulty": "Hard",
+      "avg_bsc": 81.9,
+      "final_stock": 123.39,
+      "cumulative_profit": 91244355.0
+    },
+    {
+      "id": "gen-13-normal",
+      "seed": 13,
+      "target_difficulty": "normal",
+      "difficulty": "Hard",
+      "avg_bsc": 81.9,
+      "final_stock": 107.39,
+      "cumulative_profit": 76426450.0
+    },
+    {
+      "id": "gen-13-hard",
+      "seed": 13,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 81.7,
+      "final_stock": 99.14,
+      "cumulative_profit": 69674315.0
+    },
+    {
+      "id": "gen-14-hard",
+      "seed": 14,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 81.7,
+      "final_stock": 111.97,
+      "cumulative_profit": 79800086.0
+    },
+    {
+      "id": "gen-15-hard",
+      "seed": 15,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 84.0,
+      "final_stock": 107.35,
+      "cumulative_profit": 76665062.0
+    },
+    {
+      "id": "gen-16-hard",
+      "seed": 16,
+      "target_difficulty": "hard",
+      "difficulty": "Hard",
+      "avg_bsc": 85.5,
+      "final_stock": 110.61,
+      "cumulative_profit": 82821776.0
+    }
+  ],
+  "summary": {
+    "total": 60,
+    "by_difficulty": {
+      "Easy": 20,
+      "Normal": 20,
+      "Hard": 20
+    },
+    "candidates_scanned": 81,
+    "rejected": 3
+  }
+}

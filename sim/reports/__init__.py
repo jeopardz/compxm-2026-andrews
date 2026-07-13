@@ -1,1 +1,1 @@
-"""Comp-XM Inquirer + Annual Report generators."""
+"""BizSim market and annual report generators."""

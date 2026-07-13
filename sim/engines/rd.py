@@ -1,15 +1,15 @@
 """
 R&D engine.
 
-Per Capsim:
+Per BizSim:
   - R&D project time = base_time + distance_to_new_position × time_per_unit_distance
     Roughly: 1.0 year for short revise (≤0.5 units), up to 3 years for big move
   - Age halves on revise (e.g., age 5.0 -> 2.5)
   - Cost = $1M base + position move cost + MTBF change cost
   - MTBF can move up to +/-5000 units per project
-  - Cannot launch new products in Comp-XM (only modify existing 4)
+  - Cannot launch new products in BizSim (only modify existing 4)
 
-Reference: Capstone User Guide §4.1 R&D
+Reference: business-simulation R&D rules
 """
 from __future__ import annotations
 from math import sqrt
@@ -31,19 +31,30 @@ def rd_distance(p: Product, new_pfmn: float, new_size: float) -> float:
 
 
 def rd_project_days(p: Product, new_pfmn: float, new_size: float,
-                    rd_cycle_reduction: float = 0.0) -> int:
+                    rd_cycle_reduction: float = 0.0,
+                    concurrent_projects: int = 1) -> int:
     """
-    Estimated project duration in days. TQM R&D cycle time reduction shrinks this.
+    Estimated project duration in days. TQM R&D cycle-time reduction shrinks it;
+    automation and running many projects at once lengthen it.
 
-    rd_cycle_reduction: fraction (e.g., 0.20 = 20% faster from TQM)
+    rd_cycle_reduction:  fraction faster from TQM (e.g. 0.20 = 20% faster)
+    concurrent_projects: how many of this company's products are in R&D this round
+                         (each extra one slows every project ~15%)
+
+    Base: ~175 days per unit of map distance (dist 0.5≈3mo, 1.0≈6mo, 1.84≈10mo).
+    Automation penalty (Fig 2.7): high automation makes SHORT repositioning moves take
+    much longer, but barely affects long moves — so the penalty tapers to 0 by ~3 units.
     """
     dist = rd_distance(p, new_pfmn, new_size)
-    # Calibrated to real Comp-XM revision dates (cheatsheet R1): ~175 days per unit
-    # of position distance — dist 0.5≈3mo, 1.0≈6mo, 1.4≈8mo, 1.84≈10mo (completes
-    # in-year), min ~45 days. Was 60 + 180×dist which ran ~40% too slow, pushing a
-    # normal 1.8-unit revise to 391 days (spilling into next year and failing the
-    # "revise toward this round's ideal spot to win this round" strategy).
     days = max(BASE_PROJECT_DAYS, dist * DAYS_PER_DISTANCE_UNIT)
+    # Automation drag: high automation makes a SHORT reposition take multiples longer,
+    # but fades to no effect for long moves (taper by dist 3.0) and for a pure MTBF change
+    # (dist 0 = no reposition = no penalty). Auto ≤3 is free.
+    if dist > 0:
+        auto_mult = 1 + max(0.0, p.automation - 3.0) * 0.25 * max(0.0, 1 - dist / 3.0)
+        days *= auto_mult
+    # Concurrency: two products in R&D at once slow each other ~15% each.
+    days *= (1 + 0.15 * max(0, concurrent_projects - 1))
     days *= (1 - rd_cycle_reduction)
     return int(round(days))
 
@@ -68,19 +79,21 @@ def rd_project_cost(p: Product,
 def apply_revise(p: Product,
                  new_pfmn: float, new_size: float, new_mtbf: int,
                  round_start_date: str = "2026-01-01",
-                 rd_cycle_reduction: float = 0.0) -> Dict:
+                 rd_cycle_reduction: float = 0.0,
+                 concurrent_projects: int = 1) -> Dict:
     """
     Apply an R&D revise. Updates product in place.
 
     On revise:
-      - Position moves to (new_pfmn, new_size) at completion
+      - Position moves to (new_pfmn, new_size) at completion (Revision Date)
       - MTBF moves to new_mtbf
-      - Age halves (Capsim mechanic: revising = "refreshing" the product)
+      - Age halves at completion ONLY if position changed (handled at year-end)
 
-    Returns dict with completion details.
+    concurrent_projects: how many products this company is revising this round (slows
+    every project). Returns dict with completion details.
     """
     dist = rd_distance(p, new_pfmn, new_size)
-    days = rd_project_days(p, new_pfmn, new_size, rd_cycle_reduction)
+    days = rd_project_days(p, new_pfmn, new_size, rd_cycle_reduction, concurrent_projects)
     cost = rd_project_cost(p, new_pfmn, new_size, new_mtbf)
     completion = rd_completion_date(round_start_date, days)
 
@@ -106,7 +119,7 @@ def end_of_year_apply_completed_projects(p: Product, year_end_date: str = "2026-
     """
     At year-end, finalize any R&D project that completed during the year.
 
-    Capsim age mechanics (CORRECTED):
+    BizSim age mechanics (CORRECTED):
       1. Product ages during R&D from start-of-year to completion
       2. At completion, age HALVES
       3. After completion, ages normally until year-end
@@ -130,9 +143,18 @@ def end_of_year_apply_completed_projects(p: Product, year_end_date: str = "2026-
         months_during_rd = max(0, (cd - ys).days) / 30.44
         months_after = max(0, (ye - cd).days) / 30.44
 
+        # Age halves ONLY on a repositioning (Performance/Size change). A project that
+        # changes MTBF alone does NOT reset age — the product just keeps aging normally.
+        # (Was: always halved, so bumping reliability wrongly "refreshed" a Traditional/
+        # Thrift product that actually wants to stay OLD.)
+        is_reposition = (p.rd_target_pfmn != p.pfmn) or (p.rd_target_size != p.size)
         old_age = p.age
-        age_at_completion = old_age + months_during_rd / 12.0
-        new_age = age_at_completion / 2.0 + months_after / 12.0
+        if is_reposition:
+            age_at_completion = old_age + months_during_rd / 12.0
+            new_age = age_at_completion / 2.0 + months_after / 12.0
+        else:
+            # MTBF-only: full year of normal aging, no halving.
+            new_age = old_age + (months_during_rd + months_after) / 12.0
 
         # Apply revision: position, MTBF, age, revision date
         p.pfmn = p.rd_target_pfmn
@@ -158,25 +180,25 @@ def advance_age_one_year(p: Product) -> None:
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()
-    andrews = state.get_company("Andrews")
-    print("=== R&D demo: Andrews R1 revisions ===\n")
+    apex = state.get_company("Apex")
+    print("=== R&D demo: Apex R1 revisions ===\n")
 
-    # Attic: critical revise (age 5.1, position behind Thrift)
-    attic = next(p for p in andrews.products if p.name == "Attic")
-    print(f"Attic before: pos ({attic.pfmn},{attic.size}) age {attic.age} MTBF {attic.mtbf}")
-    result = apply_revise(attic, 6.2, 13.8, 20000, "2026-01-01")
+    # Atlas: critical revise (age 5.1, position behind Thrift)
+    atlas = next(p for p in apex.products if p.name == "Atlas")
+    print(f"Atlas before: pos ({atlas.pfmn},{atlas.size}) age {atlas.age} MTBF {atlas.mtbf}")
+    result = apply_revise(atlas, 6.2, 13.8, 20000, "2026-01-01")
     print(f"  Revise to (6.2,13.8): distance {result['distance']:.2f}, "
           f"days {result['project_days']}, cost ${result['cost']/1e6:.2f}M, "
           f"completes {result['completion_date']}")
 
     # Year-end: apply completed project
-    completed = end_of_year_apply_completed_projects(attic, "2026-12-31")
+    completed = end_of_year_apply_completed_projects(atlas, "2026-12-31")
     print(f"  Year-end finalize: completed={completed}, "
-          f"new pos ({attic.pfmn},{attic.size}) new age {attic.age}")
+          f"new pos ({atlas.pfmn},{atlas.size}) new age {atlas.age}")
 
-    # Art: move to keep up with Nano drift
-    art = next(p for p in andrews.products if p.name == "Art")
-    print(f"\nArt before: pos ({art.pfmn},{art.size}) age {art.age}")
-    result = apply_revise(art, 10.5, 7.2, 24000, "2026-01-01")
+    # Arc: move to keep up with Nano drift
+    arc = next(p for p in apex.products if p.name == "Arc")
+    print(f"\nArc before: pos ({arc.pfmn},{arc.size}) age {arc.age}")
+    result = apply_revise(arc, 10.5, 7.2, 24000, "2026-01-01")
     print(f"  Revise to Nano R1 ideal (10.5,7.2): distance {result['distance']:.2f}, "
           f"days {result['project_days']}, cost ${result['cost']/1e6:.2f}M")

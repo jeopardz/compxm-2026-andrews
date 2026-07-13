@@ -1,10 +1,10 @@
 """
-AI Competitor decision logic for Baldwin, Chester, Digby.
+AI Competitor decision logic for Borealis, Crestline, Dynamo.
 
-Strategies (per Capsim Professor Guide §15 Computer Company Strategies):
-  - Baldwin: Niche Differentiator (High Tech: Nano + Elite focus)
-  - Chester: Niche Cost Leader (Low Tech: Thrift + Core focus)
-  - Digby: Broad Differentiator (all 4 segments)
+Strategies (per BizSim computer-company strategy model):
+  - Borealis: Niche Differentiator (High Tech: Nano + Elite focus)
+  - Crestline: Niche Cost Leader (Low Tech: Thrift + Core focus)
+  - Dynamo: Broad Differentiator (all 4 segments)
 
 Each AI generates per-round decisions (R&D, Marketing, Production, HR, TQM, Finance)
 based on its strategic profile and current state.
@@ -19,7 +19,7 @@ from sim.data_models import (
 
 # Strategy profiles
 STRATEGY_PROFILES = {
-    "Baldwin": {
+    "Borealis": {
         "focus_segments": ["Nano", "Elite"],
         "promo_budget_per_product": 1_500_000,
         "sales_budget_per_product": 1_300_000,
@@ -31,19 +31,19 @@ STRATEGY_PROFILES = {
         "revise_aggressiveness": "high",
         "dividend_ratio": 0.50,
     },
-    "Chester": {
+    "Crestline": {
         "focus_segments": ["Thrift", "Core"],
-        "promo_budget_per_product": 1_100_000,
-        "sales_budget_per_product": 900_000,
+        "promo_budget_per_product": 1_600_000,
+        "sales_budget_per_product": 1_600_000,
         "automation_target": {"Thrift": 9, "Core": 8, "Nano": 6, "Elite": 5},
-        "price_strategy": "low",          # low pricing for volume
+        "price_strategy": "premium",      # monetize its cost advantage; avoid EPS starvation
         "hr_recruit": 3500,
         "hr_training": 60,
-        "tqm_spend_per_round": 4_000_000,
-        "revise_aggressiveness": "low",   # save R&D, ride age
-        "dividend_ratio": 0.30,
+        "tqm_spend_per_round": 7_000_000,
+        "revise_aggressiveness": "medium",
+        "dividend_ratio": 0.65,
     },
-    "Digby": {
+    "Dynamo": {
         "focus_segments": ["Thrift", "Core", "Nano", "Elite"],
         "promo_budget_per_product": 1_200_000,
         "sales_budget_per_product": 1_000_000,
@@ -106,25 +106,25 @@ def should_revise(product: Product, segment: Segment, aggressiveness: str,
     fut_pfmn, fut_size = predicted_ideal_at_round(segment, 1)
     dist = sqrt((fut_pfmn - product.pfmn) ** 2 + (fut_size - product.size) ** 2)
     year_end_age = product.age + 1.0
-    if aggressiveness == "high":      # Baldwin — high-tech, keep Nano/Elite fresh
+    if aggressiveness == "high":      # Borealis — high-tech, keep Nano/Elite fresh
         age_tol, dist_tol = 0.8, 0.8
-    elif aggressiveness == "medium":  # Digby — broad
+    elif aggressiveness == "medium":  # Dynamo — broad
         age_tol, dist_tol = 1.2, 1.0
-    else:                              # low — Chester cost leader: let age run, track position
+    else:                              # low — Crestline cost leader: let age run, track position
         age_tol, dist_tol = 2.0, 1.0
     return year_end_age > segment.ideal_age + age_tol or dist > dist_tol
 
 
-def baldwin_decisions(state: GameState) -> RoundDecision:
-    return _generate_decisions(state, "Baldwin")
+def borealis_decisions(state: GameState) -> RoundDecision:
+    return _generate_decisions(state, "Borealis")
 
 
-def chester_decisions(state: GameState) -> RoundDecision:
-    return _generate_decisions(state, "Chester")
+def crestline_decisions(state: GameState) -> RoundDecision:
+    return _generate_decisions(state, "Crestline")
 
 
-def digby_decisions(state: GameState) -> RoundDecision:
-    return _generate_decisions(state, "Digby")
+def dynamo_decisions(state: GameState) -> RoundDecision:
+    return _generate_decisions(state, "Dynamo")
 
 
 def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
@@ -132,8 +132,8 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
 
     Affordability-aware: scales discretionary spend (marketing, TQM, automation,
     bond retirement) down when cash is tight so AIs don't crash to emergency loans
-    in R1. Previously Chester spent $16M on automation + $11M bond + $8M marketing
-    on $32M cash → bankrupt. Same for Baldwin ($19M cash).
+    in R1. Previously Crestline spent $16M on automation + $11M bond + $8M marketing
+    on $32M cash → bankrupt. Same for Borealis ($19M cash).
     """
     from sim.engines.production import automation_upgrade_cost
     company = state.get_company(company_name)
@@ -167,7 +167,7 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
         forecast = max(int(p.units_sold_last * (1 + seg_growth * 0.5)), 100)
         decision.forecast = forecast
 
-        # Production: use Capsim playbook formula = (forecast - inventory) × 1.05
+        # Production: use BizSim playbook formula = (forecast - inventory) × 1.05
         # This is the SAME formula UI defaults to — avoids overproduction that
         # was killing AI profitability via wasted material/labor + inventory carry
         target_demand = int(p.units_sold_last * (1 + seg.growth_rate))
@@ -180,7 +180,7 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
             target_pfmn, target_size = predicted_ideal_at_round(seg, 1)
             dist = _sqrt((target_pfmn - p.pfmn)**2 + (target_size - p.size)**2)
             tqm_factor = 1 + company.tqm.rd_cycle_time_reduction
-            max_reachable = (270 / 180) / tqm_factor if tqm_factor > 0 else (270/180)
+            max_reachable = (270 / 175) / tqm_factor if tqm_factor > 0 else (270/175)
             if dist > max_reachable and dist > 0:
                 # Scale toward ideal but limit to reachable distance
                 scale = max_reachable / dist
@@ -212,7 +212,7 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
 
     # Retire 13.5S2027 ONLY from leftover CAPEX cash (available_cash after automation),
     # and never in R1 (cash is committed to automation + ramping operations).
-    # BUG FIX: previously gated on stale full company.cash, so Chester retired an
+    # BUG FIX: previously gated on stale full company.cash, so Crestline retired an
     # $11.5M bond in R1 on top of automation + operating spend → emergency loan.
     bonds_2027 = [b for b in company.bonds if b.year_due == 2027]
     if bonds_2027 and round_num >= 2:
@@ -223,7 +223,7 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
             available_cash -= retire_cash_out
 
     # Current debt: the engine repays ALL prior current debt each year, so an AI
-    # must ROLL it over (reborrow) or it bleeds that cash (Digby starts with $25.5M).
+    # must ROLL it over (reborrow) or it bleeds that cash (Dynamo starts with $25.5M).
     # Roll the existing balance, plus a small working-capital buffer in early rounds.
     roll_over = company.current_debt
     buffer = int(company.sales_last * 0.03) if round_num <= 2 else 0
@@ -269,7 +269,7 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()
-    for ai_name in ["Baldwin", "Chester", "Digby"]:
+    for ai_name in ["Borealis", "Crestline", "Dynamo"]:
         decs = _generate_decisions(state, ai_name)
         print(f"\n=== {ai_name} R1 decisions ===")
         for pd in decs.products:

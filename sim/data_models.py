@@ -1,5 +1,5 @@
 """
-Pydantic data models for Comp-XM 2026 simulator.
+Pydantic data models for BizSim 2026 simulator.
 
 Conventions:
 - Money in $ (full dollars, not thousands) unless _k suffix
@@ -18,7 +18,7 @@ from datetime import date
 # ============================================================
 
 SegmentName = Literal["Thrift", "Core", "Nano", "Elite"]
-CompanyName = Literal["Andrews", "Baldwin", "Chester", "Digby"]
+CompanyName = Literal["Apex", "Borealis", "Crestline", "Dynamo"]
 
 
 class Segment(BaseModel):
@@ -97,10 +97,12 @@ class Product(BaseModel):
 
     # Last-round results (filled by round engine)
     units_sold_last: int = 0
+    segment_sales_last: Dict[str, int] = Field(default_factory=dict)
     units_produced_last: int = 0
     revenue_last: float = 0.0
     contribution_margin_last: float = 0.0
     forecast_last: int = 0           # forecast that was entered for the last round
+    potential_demand_last: int = 0  # demand before stockout/spill, for BSC scoring
 
 
 # ============================================================
@@ -121,7 +123,7 @@ class Bond(BaseModel):
 # ============================================================
 
 class HRState(BaseModel):
-    """OLD Comp-XM HR: Complement + Recruit Spend + Training Hours."""
+    """BizSim HR: Complement + Recruit Spend + Training Hours."""
     workforce_complement: int = 0     # Total needed across all production
     needed_complement: int = 0
     first_shift_complement: int = 0
@@ -187,6 +189,10 @@ class Company(BaseModel):
     dividend_per_share: float = 0.0
     eps: float = 0.0
     market_cap: float = 0.0
+    # Rolling history for the 2-year stock-price model (price driven by book
+    # value + last TWO years' EPS + last TWO years' dividend). Newest appended last.
+    eps_history: List[float] = Field(default_factory=list)
+    div_history: List[float] = Field(default_factory=list)
 
     # Last-year financial summary
     sales_last: float = 0.0
@@ -202,6 +208,13 @@ class Company(BaseModel):
     roe: float = 0.0
     emergency_loan: float = 0.0
     sp_rating: str = "BB"
+    # Accounts-receivable (credit) terms in days, carried from the finance decision.
+    # Longer terms (up to 90d) = no demand penalty; tightening (30d = −7%, 0d = −40%)
+    # frees working capital at the cost of customer-survey score. 90 = neutral baseline.
+    ar_lag: int = 90
+    # Accounts-payable terms in days. Stretching past 60d makes suppliers withhold
+    # material and starve the assembly line (90d ≈ −26% output). 30 = safe baseline.
+    ap_lag: int = 30
 
     # HR & TQM
     hr: HRState = Field(default_factory=HRState)
@@ -236,46 +249,53 @@ class ProductDecision(BaseModel):
     """One product's decisions for a round."""
     product_name: str
     # R&D
-    new_pfmn: Optional[float] = None
-    new_size: Optional[float] = None
-    new_mtbf: Optional[int] = None
+    new_pfmn: Optional[float] = Field(default=None, ge=0, le=20)
+    new_size: Optional[float] = Field(default=None, ge=0, le=20)
+    new_mtbf: Optional[int] = None  # engine clamps to the segment's valid range
     # Marketing
-    price: Optional[float] = None
-    promo_budget: Optional[float] = None
-    sales_budget: Optional[float] = None
-    forecast: Optional[int] = None            # Sales Forecast (in 000s units) — what YOU predict you'll sell
+    price: Optional[float] = Field(default=None, ge=0, le=100)
+    promo_budget: Optional[float] = Field(default=None, ge=0, le=3_000_000)
+    sales_budget: Optional[float] = Field(default=None, ge=0, le=3_000_000)
+    forecast: Optional[int] = Field(default=None, ge=0, le=10_000)
     # Production
-    production_schedule: Optional[int] = None
+    production_schedule: Optional[int] = Field(default=None, ge=0, le=10_000)
     # Automation
-    new_automation: Optional[float] = None   # buy-up to this level
+    new_automation: Optional[float] = Field(default=None, ge=1, le=10)
     # Capacity
-    capacity_change: int = 0                  # +buy, -sell (in 1000 units)
+    capacity_change: int = Field(default=0, ge=-10_000, le=10_000)
 
 
 class FinanceDecision(BaseModel):
     """Round-level finance decisions."""
-    issue_bond: float = 0.0          # face value $
+    issue_bond: float = Field(default=0.0, ge=0, le=50_000_000)
     retire_bond_early: List[str] = Field(default_factory=list)  # series numbers to retire
-    issue_stock: float = 0.0         # $ raised
-    buyback_stock: float = 0.0       # $ spent
-    dividend_per_share: float = 0.0  # $ per share
-    current_debt_borrow: float = 0.0
-    accounts_payable_lag: int = 30   # days (default 30)
-    accounts_receivable_lag: int = 30
+    issue_stock: float = Field(default=0.0, ge=0, le=50_000_000)
+    buyback_stock: float = Field(default=0.0, ge=0, le=20_000_000)
+    dividend_per_share: float = Field(default=0.0, ge=0, le=20)
+    current_debt_borrow: float = Field(default=0.0, ge=0, le=100_000_000)
+    accounts_payable_lag: int = Field(default=30, ge=0, le=140)
+    accounts_receivable_lag: int = Field(default=30, ge=0, le=140)
 
 
 class HRDecision(BaseModel):
-    recruit_spend: float = 0.0       # $0-5000 per person
-    training_hours: int = 0          # 0-80 hours
+    recruit_spend: float = Field(default=0.0, ge=0, le=5_000)
+    training_hours: int = Field(default=0, ge=0, le=80)
 
 
 class TQMDecision(BaseModel):
     initiatives: Dict[str, float] = Field(default_factory=dict)  # initiative -> $ this round
 
+    @field_validator("initiatives")
+    @classmethod
+    def validate_initiative_amounts(cls, values: Dict[str, float]) -> Dict[str, float]:
+        if any(amount < 0 or amount > 2_000_000 for amount in values.values()):
+            raise ValueError("TQM initiative spend must be between $0 and $2M")
+        return values
+
 
 class RoundDecision(BaseModel):
-    """All Andrews decisions for one round."""
-    round_num: int
+    """All Apex decisions for one round."""
+    round_num: int = Field(ge=1, le=4)
     products: List[ProductDecision]
     finance: FinanceDecision = Field(default_factory=FinanceDecision)
     hr: HRDecision = Field(default_factory=HRDecision)
@@ -292,7 +312,7 @@ class GameState(BaseModel):
     year: int                         # 2025=R0, 2026=R1, ...
     prime_interest_rate: float = 0.08
     segments: List[Segment]
-    companies: List[Company]          # Andrews, Baldwin, Chester, Digby
+    companies: List[Company]          # Apex, Borealis, Crestline, Dynamo
     industry_unit_demand: Dict[str, int] = Field(default_factory=dict)  # segment -> units
     industry_unit_sold: Dict[str, int] = Field(default_factory=dict)
 
@@ -324,7 +344,7 @@ class GameState(BaseModel):
 # ============================================================
 
 class SegmentReport(BaseModel):
-    """Per-segment market analysis for the Inquirer."""
+    """Per-segment market analysis for the Market Report."""
     segment: SegmentName
     industry_unit_demand: int
     industry_unit_sold: int

@@ -1,7 +1,7 @@
 """
 Demand allocation + Segment drift engine.
 
-Per Capsim:
+Per BizSim:
   1. Each segment's center drifts by (drift_pfmn, drift_size) per year
      (segments move toward smaller + faster every year)
   2. Total segment demand grows by `growth_rate` per year
@@ -11,7 +11,7 @@ Per Capsim:
      but primary segment gets the strongest match
   5. Stockouts: if a product runs out, demand spills to next-best alternative
 
-Reference: https://ww3.capsim.com/guides/professor/professor-guide/11-sensor-customer-buying-criteria77ba.cfm
+Reference: BizSim customer-buying criteria model
 """
 from __future__ import annotations
 from typing import Dict, List, Tuple
@@ -51,13 +51,22 @@ def compute_segment_scores(state: GameState, seg: Segment) -> List[Tuple[Product
     For one segment, compute every product's net score (sorted descending).
     Only products in rough-cut circle and with score > 0 are included.
 
-    Applies TQM demand_increase per company (e.g., QFD Effort boosts demand).
+    Applies:
+      - Effective MTBF per company (0.8×own + 0.2×line-lowest): a company's weakest
+        product drags down every sibling's SCORED reliability (Clone Spec §4.6).
+      - TQM demand_increase per company (e.g., QFD Effort boosts demand).
     """
-    # Build company TQM lookup
     tqm_boost = {c.name: 1.0 + c.tqm.demand_increase for c in state.companies}
+    # Line-lowest MTBF per company for the effective-MTBF blend.
+    line_low = {c.name: (min(p.mtbf for p in c.products) if c.products else 0)
+                for c in state.companies}
+    ar_lag = {c.name: c.ar_lag for c in state.companies}
     scored = []
     for p in all_products(state):
-        s = net_score(p, seg) * tqm_boost.get(p.company, 1.0)
+        low = line_low.get(p.company, p.mtbf)
+        eff_mtbf = 0.8 * p.mtbf + 0.2 * low
+        s = net_score(p, seg, effective_mtbf=eff_mtbf,
+                      ar_days=ar_lag.get(p.company, 90)) * tqm_boost.get(p.company, 1.0)
         if s > 0:
             scored.append((p, s))
     scored.sort(key=lambda x: -x[1])
@@ -117,6 +126,9 @@ def apply_stockouts(
 
     # Step 3: Allocate sales per segment (in order of demand), spill stockouts
     units_sold: Dict[str, int] = {p.name: 0 for p in all_products(state)}
+    sales_by_segment: Dict[str, Dict[str, int]] = {
+        p.name: {s.name: 0 for s in state.segments} for p in all_products(state)
+    }
     remaining_supply = available.copy()
 
     for seg in state.segments:
@@ -129,31 +141,53 @@ def apply_stockouts(
             have = remaining_supply.get(p.name, 0)
             ship = min(want, have)
             units_sold[p.name] += ship
+            sales_by_segment[p.name][seg.name] += ship
             remaining_supply[p.name] -= ship
             if want > ship:
                 unmet_in_segment += want - ship
-        # Second pass: redistribute unmet demand to next-best products
-        if unmet_in_segment > 0:
-            for p, _ in scored:
-                if unmet_in_segment <= 0:
-                    break
-                have = remaining_supply.get(p.name, 0)
-                if have > 0:
-                    extra = min(unmet_in_segment, have)
-                    units_sold[p.name] += extra
-                    remaining_supply[p.name] -= extra
-                    unmet_in_segment -= extra
+        # Second pass: redistribute unmet demand to products that still have supply, in
+        # proportion to their customer-survey scores (stocked-out demand cascades
+        # to the surviving in-stock competitors weighted by score — not just poured into
+        # the single next-best product). A few passes soak up rounding leftovers.
+        for _ in range(4):
+            if unmet_in_segment <= 0:
+                break
+            eligible = [(p, s) for p, s in scored if remaining_supply.get(p.name, 0) > 0]
+            if not eligible:
+                break
+            total_s = sum(s for _, s in eligible) or 1.0
+            allocated = 0
+            for p, s in eligible:
+                want = int(unmet_in_segment * s / total_s)
+                ship = min(want, remaining_supply.get(p.name, 0))
+                units_sold[p.name] += ship
+                sales_by_segment[p.name][seg.name] += ship
+                remaining_supply[p.name] -= ship
+                allocated += ship
+            if allocated <= 0:
+                # Integer rounding left everything at 0 — hand the remainder out greedily
+                # (score order) so the loop terminates.
+                for p, s in eligible:
+                    take = min(unmet_in_segment - allocated, remaining_supply.get(p.name, 0))
+                    units_sold[p.name] += take
+                    sales_by_segment[p.name][seg.name] += take
+                    remaining_supply[p.name] -= take
+                    allocated += take
+                    if allocated >= unmet_in_segment:
+                        break
+            unmet_in_segment -= allocated
 
+    for p in all_products(state):
+        p.segment_sales_last = sales_by_segment[p.name]
     return units_sold, total_demand
 
 
 def compute_actual_industry_sales(units_sold: Dict[str, int], state: GameState) -> Dict[str, int]:
     """Compute actual units sold per segment (sums where products sold)."""
-    # Simplification: attribute units to product's primary segment
-    # (in reality, units split by segment of buyer — we approximate)
     out: Dict[str, int] = {s.name: 0 for s in state.segments}
     for p in all_products(state):
-        out[p.primary_segment] = out.get(p.primary_segment, 0) + units_sold.get(p.name, 0)
+        for segment_name, sold in p.segment_sales_last.items():
+            out[segment_name] = out.get(segment_name, 0) + sold
     return out
 
 
@@ -178,11 +212,11 @@ if __name__ == "__main__":
 
     print(f"\nR1 Industry demand: {next_demand} (total {sum(next_demand.values())})")
 
-    # Schedule some production for Andrews
-    for p in state.get_company("Andrews").products:
+    # Schedule some production for Apex
+    for p in state.get_company("Apex").products:
         p.production_schedule = p.capacity_first_shift  # 1-shift output
     for c in state.companies:
-        if c.name != "Andrews":
+        if c.name != "Apex":
             for p in c.products:
                 p.production_schedule = p.capacity_first_shift
 

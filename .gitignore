@@ -11,6 +11,9 @@ venv/
 # Streamlit
 .streamlit/secrets.toml
 
+# Supabase CLI local project state
+supabase/.temp/
+
 # IDE / Editor
 .vscode/
 .idea/

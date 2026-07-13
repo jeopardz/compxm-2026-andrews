@@ -1,174 +1,110 @@
-# Comp-XM 2026 Simulator — Andrews Edition
+# BizSim
 
-A Python replica of Capsim's Comp-XM 2026 business simulation, built for exam preparation.
+BizSim is an interactive business-strategy simulator. The player manages Apex
+across four decision rounds while competing against three computer-controlled
+companies: Borealis, Crestline, and Dynamo.
 
-**Player**: Andrews Corporation (you) vs Baldwin / Chester / Digby (AI)
-**Goal**: Maximize Balanced Scorecard total (1000 pts) across 4 rounds + final cumulative
+The objective is to build a resilient company and maximize the Balanced
+Scorecard through coordinated R&D, marketing, production, finance, people, and
+quality decisions.
 
----
+## Quick start
 
-## Quick Start
+Run these commands from the repository root:
 
 ```bash
-# 1. From F:\Claude CODE\CAPSIM\
-cd F:\Claude CODE\CAPSIM
-
-# 2. Install dependencies (already done if you ran the setup)
-pip install streamlit pydantic pandas plotly pytest
-
-# 3. Run the Streamlit web app
+python -m pip install -r requirements.txt
 streamlit run sim/app.py
 ```
 
-Open `http://localhost:8501` in your browser.
+Then open `http://localhost:8501`.
 
----
+## Companies and products
+
+| Company | Products |
+|---|---|
+| Apex (player) | Atlas, Axiom, Arc, Aura |
+| Borealis | Beacon, Brio, Bloom, Bolt |
+| Crestline | Cedar, Coda, Crest, Cove |
+| Dynamo | Delta, Dune, Drift, Dusk |
 
 ## Features
 
-### Modules implemented
-- **R&D**: project time, position move cost, MTBF change, age halves on revise
-- **Marketing**: classic Promo + Sales (Comp-XM does NOT use Advanced Marketing Module)
-- **Production**: capacity cost ($6 + $4×automation), 2nd shift +50%, 200% max utilization
-- **Finance**: Income Statement, Balance Sheet, Cash Flow, bonds (5% brokerage, 80% plant cap), stock issue/buyback, dividend, credit rating
-- **HR (OLD Comp-XM)**: Recruit Spend $0-5K + Training 0-80hr × $20 + Workforce Complement (on Production)
-- **TQM**: 10 initiatives, S-curve, $4M cumulative cap, $2M per round cap
-- **AI Competitors**:
-  - Baldwin: Niche High Tech (Nano + Elite focus, premium pricing)
-  - Chester: Niche Low Tech (Thrift + Core focus, low pricing, high automation)
-  - Digby: Broad (all 4 segments, max HR)
-- **BSC Scoring**: 4 perspectives + final cumulative (approximate weights)
-- **Inquirer**: Front page, Stocks/Bonds, Segments, Production, Market Share, HR/TQM, Annual Reports
-- **Board Queries**: 30 MCQ across 5 rounds (auto-graded with explanations)
+- R&D projects with position, reliability, age, cost, and completion-time effects
+- Marketing decisions for price, promotion, sales, awareness, and accessibility
+- Production planning for capacity, automation, inventory, labor, and utilization
+- Finance decisions for debt, bonds, shares, dividends, cash flow, and credit rating
+- People and quality investments with cumulative operational effects
+- Rule-based computer competitors with distinct strategies
+- Balanced Scorecard results and round-by-round history
+- Deterministic scenario generation with Easy, Normal, and Hard variants
+- Pre-validation of generated scenarios through structural and four-round checks
+- Local play plus optional authentication, persistence, and billing integrations
 
-### UI Pages
-1. **🏠 Dashboard** — overview, perceptual map, KPIs
-2. **📝 Decisions (R&D/Mkt/Prod)** — per-product decision forms
-3. **💰 Finance/HR/TQM** — bonds, dividend, HR sliders, TQM allocator
-4. **📰 Comp-XM Inquirer** — full newsletter
-5. **❓ Board Queries** — MCQ practice
-6. **📊 Balanced Scorecard** — round + cumulative
-7. **📈 History & Trends** — round-by-round charts
-8. **⚙️ Settings** — save/reset
+## Application pages
 
----
+1. Dashboard
+2. R&D, marketing, and production decisions
+3. Finance, people, and quality decisions
+4. Industry newsletter and annual reports
+5. Board questions
+6. Balanced Scorecard
+7. History and trends
+8. Settings and saved games
 
 ## Architecture
 
-```
+```text
 sim/
-├── __init__.py
-├── app.py                      # Streamlit UI
-├── data_models.py              # Pydantic schemas (Segment, Product, Company, Bond, etc.)
-├── ai_competitors.py           # Baldwin/Chester/Digby decision logic
-├── board_queries.py            # 30 MCQ questions
-├── data/
-│   ├── __init__.py
-│   └── r0_seed.py              # R0 starting state from Comp-XM Inquirer 2026
-├── engines/
-│   ├── __init__.py
-│   ├── customer_score.py       # Customer survey + weighted score
-│   ├── demand.py               # Segment drift + demand allocation
-│   ├── production.py           # Capacity, automation, labor
-│   ├── rd.py                   # R&D project mechanics
-│   ├── marketing.py            # Awareness/Accessibility curves
-│   ├── finance.py              # IS/BS/CF + bonds + ratios
-│   ├── hr.py                   # OLD Comp-XM 3-decision HR
-│   ├── tqm.py                  # 10 TQM initiatives + S-curve
-│   ├── bsc.py                  # Balanced Scorecard scoring
-│   └── round_engine.py         # Round orchestrator
-├── reports/
-│   ├── __init__.py
-│   └── inquirer.py             # Comp-XM newsletter generator
-└── tests/
-    ├── __init__.py
-    └── test_integration_4round.py
+|-- app.py                  # Streamlit user interface
+|-- data_models.py          # Core state and decision schemas
+|-- ai_competitors.py       # Borealis/Crestline/Dynamo strategies
+|-- board_queries.py        # Board-question bank
+|-- data/
+|   |-- r0_seed.py          # Reference starting state
+|   |-- scenarios.py        # Deterministic scenario generation
+|   |-- scenario_validator.py
+|   `-- scenario_pool.py
+|-- engines/
+|   |-- customer_score.py
+|   |-- demand.py
+|   |-- production.py
+|   |-- rd.py
+|   |-- marketing.py
+|   |-- finance.py
+|   |-- hr.py
+|   |-- tqm.py
+|   |-- bsc.py
+|   `-- round_engine.py
+|-- reports/
+|   `-- market_report.py
+`-- tests/
 ```
 
----
+## Scenario model
 
-## Data Sources
+Every generated board is deterministic: rebuilding the same scenario ID yields
+the same starting state. Before a scenario enters the playable pool, validation
+checks that:
 
-R0 state is loaded from official Comp-XM 2026 reports in `F:\Claude CODE\CAPSIM\`:
-- **Comp-XM - Industry Conditions Report 2026** → segments, drift vectors, growth rates, buying criteria
-- **Comp-XM - Inquirer Report 2026 R0** → company financials, product positions, bonds, market share
+- financial statements remain balanced;
+- products and market parameters are structurally valid;
+- segment drift stays within the perceptual map;
+- a complete four-round baseline playthrough does not crash;
+- companies remain solvent and every segment retains demand; and
+- baseline performance falls within a useful difficulty range.
 
----
-
-## Limitations vs Real Comp-XM
-
-| Feature | Status |
-|---|---|
-| Customer survey formula | ✅ Public Capsim formula |
-| Segment drift + growth | ✅ Official R0 data |
-| Production cost | ✅ Public formula |
-| Bond pricing | ✅ Approximated |
-| BSC weights | ⚠️ APPROXIMATE (Capsim proprietary; off by ±20%) |
-| AI competitor behavior | ⚠️ Rule-based, not adaptive (real Capsim is deterministic too) |
-| Random events (recession, lawsuit) | ❌ Not modeled |
-| Stock price formula | ⚠️ Approximate (BV + 5×EPS + 10×Div) |
-| Sales Forecast accuracy effect | ⚠️ Simplified |
-
----
-
-## Validation against R0 data
-
-| Metric | Simulator | Inquirer | Match? |
-|---|---|---|---|
-| Andrews Sales | $163.3M | $163.3M | ✅ |
-| Andrews ROS | 12.3% | 12.3% | ✅ |
-| Andrews ROE | 28.3% | 28.3% | ✅ |
-| Andrews Stock | $95.38 | $95.38 | ✅ |
-| Andrews Plant | $96.8M | $96.8M | ✅ |
-| Andrews Bonds | $27.2M | $27.2M | ✅ |
-| Industry Total | 18,901 | 18,902 | ✅ |
-| Thrift R0 demand | 5,101 | 5,101 | ✅ |
-| Andrews Thrift share | 14.3% (sim model) | 16% (Inquirer) | ⚠️ ~10% diff |
-
----
-
-## Run Tests
+## Run tests
 
 ```bash
-cd F:\Claude CODE\CAPSIM
-python -m pytest sim/tests/ -v
-python -m sim.tests.test_integration_4round   # end-to-end 4-round playthrough
+python -m pytest sim/tests -v
+python -m sim.tests.test_integration_4round
 ```
 
----
+## Model limitations
 
-## Example Baseline Score
-
-Using default sensible decisions (revise all, $1.5M Promo, $1.5M Sales, max premium pricing, Conservative TQM, $2500 + 40hr HR, retire 13.5S2027):
-
-| Round | Stock | Profit | BSC |
-|---|---|---|---|
-| R1 | $110.67 | $7.5M | 82.8 |
-| R2 | $124.75 | $13.1M | 83.7 |
-| R3 | $91.05 | $7.6M | 71.5 |
-| R4 | $92.88 | $8.4M | 70.1 |
-| **TOTAL** | | $36.6M cum | **594.8/1000** |
-
-**Passing score**: ~662 (50th percentile). Try better decisions to push higher!
-
----
-
-## How to Practice for the Real Exam
-
-1. **Read Comp-XM Industry Conditions Report 2026** (in `F:\Claude CODE\CAPSIM\`) to understand R0
-2. **Use the Streamlit simulator** to test "what if" scenarios:
-   - What if I price Attic at $20 instead of $26?
-   - What if I retire all bonds in R1?
-   - What if I skip TQM in R4?
-3. **Practice Board Queries** — the MCQ bank covers all common Comp-XM topics
-4. **Track BSC trends** — Stock + Profit + Customer score are the biggest drivers
-5. **Read the Andrews Playbook** (`CompXM_2026_Andrews_Playbook.pdf`) alongside
-
----
-
-## Limitations to Remember on Exam Day
-
-- This simulator's BSC weights are approximate — real Capsim may score differently
-- AI competitors here use fixed strategies — real Baldwin/Chester/Digby behavior may differ
-- Use this as a **practice tool**, not a perfect predictor
-- The actual exam runs on Capsim's servers; this only simulates the logic
+BizSim is an educational decision model rather than a forecast of real company
+performance. Several equations, competitor strategies, market events, and
+Balanced Scorecard weights are intentionally simplified or approximated. Use
+results to compare strategies inside BizSim, not as financial advice or as a
+guarantee of outcomes in another simulation.

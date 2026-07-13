@@ -1,5 +1,5 @@
 """
-Comp-XM Inquirer report generator.
+BizSim market report generator.
 
 Produces:
   - Front Page (financial summary across 4 companies)
@@ -12,8 +12,8 @@ Produces:
   - HR/TQM Summary
   - Per-company Annual Reports
 
-Unlike Capstone Courier, Inquirer shows only CURRENT round's data
-(no historical). However, Annual Reports for all 4 companies are included.
+The market report shows only the current round's data (no history), while
+annual reports for all four companies are included.
 """
 from __future__ import annotations
 from typing import Dict, List
@@ -78,7 +78,7 @@ def stocks_bonds_page(state: GameState) -> Dict:
 
 def financial_summary_table(state: GameState) -> Dict:
     """IS / BS / CF survey table comparing 4 companies."""
-    cols = ["Andrews", "Baldwin", "Chester", "Digby"]
+    cols = ["Apex", "Borealis", "Crestline", "Dynamo"]
     data = {}
     for c in state.companies:
         data[c.name] = {
@@ -175,12 +175,20 @@ def segment_analysis(state: GameState, segment_name: str) -> Dict:
     for entry in product_scores:
         prod = entry["_product_ref"]
         # Sum this product's net_score across all 4 segments
-        all_seg_scores = [net_score(prod, s) for s in state.segments]
-        total_prod_score = sum(all_seg_scores) or 1
-        # This segment's score / total = fraction of units that go to this segment
-        this_seg_fraction = entry["Cust_Score"] / total_prod_score
-        units_in_this_seg = int(prod.units_sold_last * this_seg_fraction)
+        units_in_this_seg = prod.segment_sales_last.get(segment_name, 0)
         entry["Units_Sold"] = units_in_this_seg
+        # Actual vs Potential: Potential = the units this product's
+        # customer-survey score DESERVED (score share × segment demand); Actual = what it
+        # sold. Potential > Actual ⇒ under-produced / stocked out (lost sales); Actual >
+        # Potential ⇒ windfall from a rival's stock-out.
+        potential = int(entry["Market_Share_Pct"] / 100 * total_demand)
+        entry["Potential_Units"] = potential
+        if potential > 0 and units_in_this_seg < potential * 0.9:
+            entry["Demand_Status"] = "Under-served (stock-out)"
+        elif units_in_this_seg > potential * 1.1:
+            entry["Demand_Status"] = "Windfall"
+        else:
+            entry["Demand_Status"] = "Balanced"
         # Stock out: True if inventory hit 0 AND production was less than demand
         # Approximation: if inventory = 0 AND units_sold reached production cap
         entry["Stock_Out"] = "YES" if (prod.inventory == 0 and prod.units_sold_last >= prod.production_schedule and prod.production_schedule > 0) else ""
@@ -295,8 +303,8 @@ def annual_report(company: Company, state: GameState) -> Dict:
     }
 
 
-def full_inquirer(state: GameState) -> Dict:
-    """Generate the complete Inquirer for the current round."""
+def full_market_report(state: GameState) -> Dict:
+    """Generate the complete market report for the current round."""
     return {
         "round": state.round_num,
         "year": state.year,
@@ -319,14 +327,14 @@ def full_inquirer(state: GameState) -> Dict:
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()
-    inq = full_inquirer(state)
-    print(f"=== Inquirer R{state.round_num} ===\n")
+    market_report = full_market_report(state)
+    print(f"=== Market Report R{state.round_num} ===\n")
     print("Front Page:")
-    for cname, d in inq["front_page"]["data"].items():
+    for cname, d in market_report["front_page"]["data"].items():
         print(f"  {cname}: Sales {d['Sales']}, Profit {d['Profits']}, ROS {d['ROS']}, ROE {d['ROE']}, Stock ${d.get('Stock','?')}")
-    print(f"\nTotal segments analyzed: {len(inq['segments'])}")
-    print(f"Total bonds tracked: {len(inq['stocks_bonds']['bonds'])}")
-    print(f"Total products: {len(inq['production_analysis'])}")
+    print(f"\nTotal segments analyzed: {len(market_report['segments'])}")
+    print(f"Total bonds tracked: {len(market_report['stocks_bonds']['bonds'])}")
+    print(f"Total products: {len(market_report['production_analysis'])}")
     print("\nThrift Top Products (top 5):")
-    for p in inq["segments"]["Thrift"]["top_products"][:5]:
+    for p in market_report["segments"]["Thrift"]["top_products"][:5]:
         print(f"  {p['Name']} ({p['Company']}): score {p['Cust_Score']:.1f}, share {p['Market_Share_Pct']:.1f}%")

@@ -1,7 +1,7 @@
 """
 TQM engine — 10 initiatives, S-curve response, cap $2M/initiative/round, $4M cumulative.
 
-Per Capsim TQM Guide:
+Per BizSim TQM model:
   Process Management initiatives:
     - CPI Systems (Continuous Process Improvement) -> material -3% to -5%
     - Vendor/JIT -> material -3% to -5%
@@ -26,7 +26,7 @@ Per Capsim TQM Guide:
   S-curve: $0 = no impact, $1M = ~half impact, $2M = ~full impact per round
            $4M cumulative cap per initiative
 
-Reference: Capsim TQM Guide
+Reference: BizSim TQM model
 """
 from __future__ import annotations
 from typing import Dict
@@ -35,15 +35,20 @@ from sim.data_models import Company, TQMState
 
 # Per-initiative max impact (full effect at $4M cumulative)
 TQM_IMPACTS = {
+    # Initiative → effect mapping follows the BizSim specification §7.1:
+    #   UNEP Green   = ↑Demand + ↓Material (was: ↓Admin — wrong lever entirely)
+    #   Benchmarking = ↓Admin ONLY         (was: also ↓R&D cycle — that belongs to QFD)
+    #   QFD Effort   = ↓R&D cycle + ↑Demand (was: ↑Demand only — missing its cycle-time cut)
+    # Aggregate ceilings below are unchanged (rd_cycle still reaches −40% via CE+QFD).
     "CPI Systems":              {"material": -0.04, "labor": 0, "rd_cycle": 0, "admin": 0, "demand": 0},
     "Vendor/JIT":               {"material": -0.04, "labor": 0, "rd_cycle": 0, "admin": 0, "demand": 0},
     "QIT":                      {"material": 0, "labor": -0.03, "rd_cycle": 0, "admin": 0, "demand": 0},
     "Channel Support Systems":  {"material": 0, "labor": 0, "rd_cycle": 0, "admin": 0, "demand": +0.015},
     "Concurrent Engineering":   {"material": 0, "labor": 0, "rd_cycle": -0.30, "admin": 0, "demand": 0},
-    "UNEP Green Programs":      {"material": 0, "labor": 0, "rd_cycle": 0, "admin": -0.015, "demand": 0},
+    "UNEP Green Programs":      {"material": -0.015, "labor": 0, "rd_cycle": 0, "admin": 0, "demand": +0.015},
     "GEMI TQEM":                {"material": -0.04, "labor": 0, "rd_cycle": 0, "admin": 0, "demand": +0.025},
-    "Benchmarking":             {"material": 0, "labor": 0, "rd_cycle": -0.15, "admin": -0.025, "demand": 0},
-    "QFD Effort":               {"material": 0, "labor": 0, "rd_cycle": 0, "admin": 0, "demand": +0.07},
+    "Benchmarking":             {"material": 0, "labor": 0, "rd_cycle": 0, "admin": -0.025, "demand": 0},
+    "QFD Effort":               {"material": 0, "labor": 0, "rd_cycle": -0.15, "admin": 0, "demand": +0.045},
     "CCE/6 Sigma":              {"material": -0.075, "labor": -0.105, "rd_cycle": 0, "admin": 0, "demand": 0},
 }
 
@@ -108,7 +113,7 @@ def update_tqm(company: Company, spend_per_initiative: Dict[str, float]) -> Dict
         adm += impacts["admin"] * factor
         dem += impacts["demand"] * factor
 
-    # Cap at official Capsim maxes
+    # Cap at BizSim maximums
     tqm.material_cost_reduction = max(-0.118, mat)
     tqm.labor_cost_reduction = max(-0.14, lab)
     tqm.rd_cycle_time_reduction = max(-0.40, rd)
@@ -167,12 +172,12 @@ def recommended_initiatives_for_round(round_num: int) -> Dict[str, float]:
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()
-    andrews = state.get_company("Andrews")
+    apex = state.get_company("Apex")
     print("=== TQM 4-round projection (Conservative R4 strategy) ===\n")
     for r in range(1, 5):
         rec = recommended_initiatives_for_round(r)
         total = sum(rec.values())
-        result = update_tqm(andrews, rec)
+        result = update_tqm(apex, rec)
         print(f"R{r}: spend ${total/1e6:.1f}M on {list(rec.keys())}")
         print(f"  Cumulative ${result['cumulative_spend_total']/1e6:.1f}M")
         print(f"  Impacts: material {result['material_impact_pct']:.1f}%, labor {result['labor_impact_pct']:.1f}%, "

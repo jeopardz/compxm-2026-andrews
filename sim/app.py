@@ -1,8 +1,8 @@
 """
-Comp-XM 2026 Andrews Simulator — Streamlit UI (Capsim-styled)
+BizSim 2026 Apex Simulator — Streamlit UI (BizSim-styled)
 
 Run with:
-    streamlit run F:/Claude CODE/CAPSIM/sim/app.py
+    streamlit run sim/app.py
 """
 import streamlit as st
 import pandas as pd
@@ -17,19 +17,28 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sim.data.r0_seed import build_r0_state
 from sim.data_models import (
     GameState, RoundDecision, ProductDecision, FinanceDecision,
-    HRDecision, TQMDecision,
+    HRDecision, TQMDecision, BoardQueryQuestion,
 )
 from sim.engines.round_engine import advance_round
 from sim.engines.customer_score import net_score
-from sim.reports.inquirer import full_inquirer
+from sim.reports.market_report import full_market_report
 from sim.engines.bsc import compute_round_bsc, compute_cumulative_bsc
 from sim.board_queries import get_round_queries, grade_round
+from sim.board_query_gen import generate_round_queries, grade_generated
 from sim.engines.tqm import INITIATIVE_NAMES, recommended_initiatives_for_round
+from sim.state_migration import normalize_save_payload
+
+# SaaS layer — all no-ops when AUTH_ENABLED is false (local study mode unchanged).
+from sim.auth import auth_enabled, require_login, render_logout, init_cookies
+from sim.billing import (
+    can_advance, can_rewind, can_reset, render_paywall, render_entitlement_badge,
+)
+from sim import game_session as gs
 
 SAVE_PATH = Path(__file__).parent / "save_state.json"
 
 st.set_page_config(
-    page_title="Comp-XM® 2026 — Andrews",
+    page_title="BizSim 2026 — Apex",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -37,24 +46,24 @@ st.set_page_config(
 
 
 # ============================================================
-# CAPSIM-STYLE CSS (extensive theming)
+# BIZSIM-STYLE CSS (extensive theming)
 # ============================================================
 
-CAPSIM_CSS = """
+BIZSIM_CSS = """
 <style>
-    /* Color tokens — Capsim navy/white/gold */
+    /* Color tokens — BizSim navy/white/gold */
     :root {
-        --capsim-navy: #1a365d;
-        --capsim-navy-dark: #0f2440;
-        --capsim-navy-light: #2c5282;
-        --capsim-gold: #d69e2e;
-        --capsim-gold-dark: #b7791f;
-        --capsim-red: #c53030;
-        --capsim-green: #2f855a;
-        --capsim-bg: #f7fafc;
-        --capsim-border: #cbd5e0;
-        --capsim-text: #2d3748;
-        --capsim-text-muted: #718096;
+        --bizsim-navy: #1a365d;
+        --bizsim-navy-dark: #0f2440;
+        --bizsim-navy-light: #2c5282;
+        --bizsim-gold: #d69e2e;
+        --bizsim-gold-dark: #b7791f;
+        --bizsim-red: #c53030;
+        --bizsim-green: #2f855a;
+        --bizsim-bg: #f7fafc;
+        --bizsim-border: #cbd5e0;
+        --bizsim-text: #2d3748;
+        --bizsim-text-muted: #718096;
     }
 
     /* Hide Streamlit chrome */
@@ -62,110 +71,109 @@ CAPSIM_CSS = """
     .block-container { padding-top: 0.5rem; padding-bottom: 1rem; max-width: 1400px; }
 
     /* Base */
-    .stApp { background-color: var(--capsim-bg); color: var(--capsim-text); }
+    .stApp { background-color: var(--bizsim-bg); color: var(--bizsim-text); }
 
-    /* === COMP-XM HEADER BAR === */
-    .compxm-header {
-        background: linear-gradient(135deg, var(--capsim-navy) 0%, var(--capsim-navy-dark) 100%);
+    /* === BIZSIM HEADER BAR === */
+    .bizsim-header {
+        background: linear-gradient(135deg, var(--bizsim-navy) 0%, var(--bizsim-navy-dark) 100%);
         color: white;
         padding: 12px 24px;
         margin: -10px -10px 16px -10px;
-        border-bottom: 4px solid var(--capsim-gold);
+        border-bottom: 4px solid var(--bizsim-gold);
         display: flex;
         justify-content: space-between;
         align-items: center;
         font-family: 'Segoe UI', Arial, sans-serif;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .compxm-logo {
+    .bizsim-logo {
         font-size: 22px;
         font-weight: 700;
         letter-spacing: 0.5px;
     }
-    .compxm-logo .reg { font-size: 12px; vertical-align: super; }
-    .compxm-logo .sub {
+    .bizsim-logo .sub {
         font-size: 12px; font-weight: 400; color: #cbd5e0; margin-left: 8px;
         letter-spacing: 1px;
     }
-    .compxm-round-badge {
-        background: var(--capsim-gold);
-        color: var(--capsim-navy-dark);
+    .bizsim-round-badge {
+        background: var(--bizsim-gold);
+        color: var(--bizsim-navy-dark);
         padding: 4px 14px;
         border-radius: 4px;
         font-weight: 700;
         font-size: 14px;
         letter-spacing: 0.5px;
     }
-    .compxm-tagline {
+    .bizsim-tagline {
         font-size: 11px; color: #cbd5e0; text-align: right;
     }
 
     /* === NAV TABS === */
     div[data-baseweb="tab-list"] {
         background-color: white;
-        border-bottom: 2px solid var(--capsim-navy);
+        border-bottom: 2px solid var(--bizsim-navy);
         gap: 0;
         margin-bottom: 16px;
     }
     button[data-baseweb="tab"] {
         background-color: #edf2f7;
-        color: var(--capsim-navy);
+        color: var(--bizsim-navy);
         border-radius: 0;
-        border-right: 1px solid var(--capsim-border);
+        border-right: 1px solid var(--bizsim-border);
         padding: 8px 16px !important;
         font-weight: 600;
         font-size: 13px;
         margin: 0 !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: var(--capsim-navy);
+        background-color: var(--bizsim-navy);
         color: white;
-        border-bottom: 2px solid var(--capsim-gold);
+        border-bottom: 2px solid var(--bizsim-gold);
     }
 
     /* === HEADINGS === */
-    h1 { color: var(--capsim-navy); font-weight: 700; }
-    h2 { color: var(--capsim-navy); border-bottom: 2px solid var(--capsim-gold); padding-bottom: 4px; font-weight: 700; font-size: 1.4rem; }
-    h3 { color: var(--capsim-navy); font-weight: 600; font-size: 1.15rem; }
+    h1 { color: var(--bizsim-navy); font-weight: 700; }
+    h2 { color: var(--bizsim-navy); border-bottom: 2px solid var(--bizsim-gold); padding-bottom: 4px; font-weight: 700; font-size: 1.4rem; }
+    h3 { color: var(--bizsim-navy); font-weight: 600; font-size: 1.15rem; }
 
     /* === SECTION CARD === */
-    .capsim-section {
+    .bizsim-section {
         background: white;
-        border: 1px solid var(--capsim-border);
-        border-top: 3px solid var(--capsim-navy);
+        border: 1px solid var(--bizsim-border);
+        border-top: 3px solid var(--bizsim-navy);
         padding: 14px 18px;
         margin: 8px 0;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .capsim-section-title {
-        color: var(--capsim-navy);
+    .bizsim-section-title {
+        color: var(--bizsim-navy);
         font-weight: 700;
         font-size: 14px;
         text-transform: uppercase;
         letter-spacing: 1px;
-        border-bottom: 1px solid var(--capsim-border);
+        border-bottom: 1px solid var(--bizsim-border);
         padding-bottom: 6px;
         margin-bottom: 10px;
     }
 
-    /* === KPI CARDS (mimics Capsim metric tiles) === */
+    /* === KPI CARDS (mimics BizSim metric tiles) === */
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
     .kpi-card {
-        background: white; border: 1px solid var(--capsim-border);
-        padding: 10px 12px; border-left: 3px solid var(--capsim-navy);
+        background: white; border: 1px solid var(--bizsim-border);
+        padding: 10px 12px; border-left: 3px solid var(--bizsim-navy);
     }
-    .kpi-card.up { border-left-color: var(--capsim-green); }
-    .kpi-card.down { border-left-color: var(--capsim-red); }
-    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--capsim-text-muted); font-weight: 600; }
-    .kpi-value { font-size: 18px; font-weight: 700; color: var(--capsim-navy); margin: 2px 0; }
-    .kpi-delta { font-size: 11px; color: var(--capsim-text-muted); }
-    .kpi-delta.up { color: var(--capsim-green); }
-    .kpi-delta.down { color: var(--capsim-red); }
+    .kpi-card.up { border-left-color: var(--bizsim-green); }
+    .kpi-card.down { border-left-color: var(--bizsim-red); }
+    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--bizsim-text-muted); font-weight: 600; }
+    .kpi-value { font-size: 18px; font-weight: 700; color: var(--bizsim-navy); margin: 2px 0; }
+    .kpi-delta { font-size: 11px; color: var(--bizsim-text-muted); }
+    .kpi-delta.up { color: var(--bizsim-green); }
+    .kpi-delta.down { color: var(--bizsim-red); }
 
-    /* === DATA TABLES (Capsim spreadsheet style) === */
+    /* === DATA TABLES (BizSim spreadsheet style) === */
     .stDataFrame, .stTable { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }
     .stDataFrame [data-testid="stDataFrameResizable"] table thead th {
-        background-color: var(--capsim-navy) !important;
+        background-color: var(--bizsim-navy) !important;
         color: white !important;
         font-weight: 700 !important;
         text-transform: uppercase;
@@ -173,16 +181,16 @@ CAPSIM_CSS = """
         letter-spacing: 0.5px;
     }
     .stDataFrame [data-testid="stDataFrameResizable"] table tbody tr:nth-child(even) {
-        background-color: var(--capsim-bg);
+        background-color: var(--bizsim-bg);
     }
     .stDataFrame [data-testid="stDataFrameResizable"] table tbody td {
         padding: 4px 8px !important;
-        border-color: var(--capsim-border) !important;
+        border-color: var(--bizsim-border) !important;
     }
 
     /* === BUTTONS === */
     .stButton button {
-        background-color: var(--capsim-navy);
+        background-color: var(--bizsim-navy);
         color: white;
         border: none;
         border-radius: 2px;
@@ -192,26 +200,26 @@ CAPSIM_CSS = """
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    .stButton button:hover { background-color: var(--capsim-navy-light); transform: none; }
+    .stButton button:hover { background-color: var(--bizsim-navy-light); transform: none; }
     .stButton button[kind="primary"] {
-        background-color: var(--capsim-gold);
-        color: var(--capsim-navy-dark);
+        background-color: var(--bizsim-gold);
+        color: var(--bizsim-navy-dark);
     }
-    .stButton button[kind="primary"]:hover { background-color: var(--capsim-gold-dark); }
+    .stButton button[kind="primary"]:hover { background-color: var(--bizsim-gold-dark); }
 
     /* === FORM INPUTS === */
     .stNumberInput input, .stTextInput input, .stSelectbox div[data-baseweb="select"] {
-        border: 1px solid var(--capsim-border) !important;
+        border: 1px solid var(--bizsim-border) !important;
         border-radius: 2px !important;
         font-family: 'Consolas', monospace !important;
         font-size: 13px !important;
     }
-    .stNumberInput input:focus { border-color: var(--capsim-navy) !important; box-shadow: 0 0 0 1px var(--capsim-navy) !important; }
-    .stSlider [data-baseweb="slider"] > div > div > div { background-color: var(--capsim-navy) !important; }
+    .stNumberInput input:focus { border-color: var(--bizsim-navy) !important; box-shadow: 0 0 0 1px var(--bizsim-navy) !important; }
+    .stSlider [data-baseweb="slider"] > div > div > div { background-color: var(--bizsim-navy) !important; }
 
     /* === EXPANDERS === */
     .streamlit-expanderHeader {
-        background-color: var(--capsim-navy) !important;
+        background-color: var(--bizsim-navy) !important;
         color: white !important;
         font-weight: 700 !important;
         text-transform: uppercase;
@@ -221,41 +229,41 @@ CAPSIM_CSS = """
         border-radius: 0 !important;
     }
     div[data-testid="stExpander"] {
-        border: 1px solid var(--capsim-border) !important;
+        border: 1px solid var(--bizsim-border) !important;
         margin-bottom: 8px;
     }
 
-    /* === NEWSPAPER-STYLE INQUIRER === */
-    .inq-paper {
+    /* === NEWSPAPER-STYLE MARKET REPORT === */
+    .report-paper {
         background: white;
-        border: 2px solid var(--capsim-navy);
+        border: 2px solid var(--bizsim-navy);
         padding: 20px 28px;
         font-family: 'Georgia', 'Times New Roman', serif;
         max-width: 100%;
         margin: 16px 0;
     }
-    .inq-masthead {
+    .report-masthead {
         text-align: center;
-        border-bottom: 3px double var(--capsim-navy);
+        border-bottom: 3px double var(--bizsim-navy);
         padding-bottom: 12px;
         margin-bottom: 18px;
     }
-    .inq-masthead h1 {
+    .report-masthead h1 {
         font-family: 'Georgia', serif !important;
         font-size: 38px !important;
         margin: 0;
         letter-spacing: 4px;
-        color: var(--capsim-navy);
+        color: var(--bizsim-navy);
     }
-    .inq-masthead .subtitle {
+    .report-masthead .subtitle {
         font-size: 13px;
-        color: var(--capsim-text-muted);
+        color: var(--bizsim-text-muted);
         text-transform: uppercase;
         letter-spacing: 2px;
         margin-top: 4px;
     }
-    .inq-section-head {
-        background: var(--capsim-navy);
+    .report-section-head {
+        background: var(--bizsim-navy);
         color: white;
         padding: 6px 12px;
         font-weight: 700;
@@ -265,20 +273,20 @@ CAPSIM_CSS = """
         font-family: 'Segoe UI', Arial, sans-serif;
         margin: 16px 0 8px 0;
     }
-    .inq-page-marker {
+    .report-page-marker {
         text-align: right;
         font-size: 11px;
-        color: var(--capsim-text-muted);
+        color: var(--bizsim-text-muted);
         font-style: italic;
         margin-top: 8px;
-        border-top: 1px solid var(--capsim-border);
+        border-top: 1px solid var(--bizsim-border);
         padding-top: 4px;
     }
 
     /* Annual Report classic style */
     .annual-report {
         background: white;
-        border: 1px solid var(--capsim-border);
+        border: 1px solid var(--bizsim-border);
         padding: 20px;
         font-family: 'Times New Roman', serif;
     }
@@ -291,24 +299,24 @@ CAPSIM_CSS = """
         margin: 8px 0;
     }
     .annual-report table th {
-        background: var(--capsim-navy);
+        background: var(--bizsim-navy);
         color: white;
         padding: 4px 8px;
         text-align: left;
     }
     .annual-report table td {
         padding: 3px 8px;
-        border-bottom: 1px solid var(--capsim-border);
+        border-bottom: 1px solid var(--bizsim-border);
     }
     .annual-report table tr.total {
         font-weight: 700;
-        border-top: 2px solid var(--capsim-navy);
-        background: var(--capsim-bg);
+        border-top: 2px solid var(--bizsim-navy);
+        background: var(--bizsim-bg);
     }
 
     /* Module navigation (left side of decision pages) */
     .module-nav {
-        background: var(--capsim-navy);
+        background: var(--bizsim-navy);
         color: white;
         padding: 0;
         margin: 8px 0;
@@ -316,23 +324,23 @@ CAPSIM_CSS = """
     .module-nav-item {
         display: block;
         padding: 8px 14px;
-        border-bottom: 1px solid var(--capsim-navy-light);
+        border-bottom: 1px solid var(--bizsim-navy-light);
         color: white;
         text-decoration: none;
         font-size: 13px;
         font-weight: 600;
     }
-    .module-nav-item:hover { background: var(--capsim-navy-light); }
-    .module-nav-item.active { background: var(--capsim-gold); color: var(--capsim-navy-dark); }
+    .module-nav-item:hover { background: var(--bizsim-navy-light); }
+    .module-nav-item.active { background: var(--bizsim-gold); color: var(--bizsim-navy-dark); }
 
     /* Footer */
-    .compxm-footer {
+    .bizsim-footer {
         text-align: center;
         font-size: 10px;
-        color: var(--capsim-text-muted);
+        color: var(--bizsim-text-muted);
         margin-top: 20px;
         padding-top: 8px;
-        border-top: 1px solid var(--capsim-border);
+        border-top: 1px solid var(--bizsim-border);
         letter-spacing: 1px;
         text-transform: uppercase;
     }
@@ -357,20 +365,20 @@ CAPSIM_CSS = """
 
     /* Streamlit metric override */
     div[data-testid="stMetric"] {
-        background: white; border: 1px solid var(--capsim-border);
-        border-left: 3px solid var(--capsim-navy);
+        background: white; border: 1px solid var(--bizsim-border);
+        border-left: 3px solid var(--bizsim-navy);
         padding: 8px 12px;
     }
     div[data-testid="stMetricLabel"] {
         font-size: 10px !important;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: var(--capsim-text-muted) !important;
+        color: var(--bizsim-text-muted) !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricValue"] {
         font-size: 20px !important;
-        color: var(--capsim-navy) !important;
+        color: var(--bizsim-navy) !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricDelta"] {
@@ -379,7 +387,7 @@ CAPSIM_CSS = """
 </style>
 """
 
-st.markdown(CAPSIM_CSS, unsafe_allow_html=True)
+st.markdown(BIZSIM_CSS, unsafe_allow_html=True)
 
 
 # ============================================================
@@ -394,17 +402,32 @@ def init_state():
             try:
                 with open(SAVE_PATH, "r", encoding="utf-8") as f:
                     payload = json.load(f)
+                payload = normalize_save_payload(payload)
                 loaded = GameState.model_validate(payload["game_state"])
                 st.session_state.bsc_history = payload.get("bsc_history", [])
-                st.session_state.board_results = payload.get("board_results", {})
+                allowed_query_rounds = set(range(1, min(loaded.round_num, 4) + 1))
+                if loaded.round_num >= 4:
+                    allowed_query_rounds.add(5)
+                st.session_state.board_results = {
+                    int(k): v for k, v in payload.get("board_results", {}).items()
+                    if int(k) in allowed_query_rounds
+                }
+                st.session_state.gen_queries = {
+                    int(k): [BoardQueryQuestion.model_validate(q) for q in v]
+                    for k, v in payload.get("gen_queries", {}).items()
+                    if int(k) in allowed_query_rounds
+                }
                 # Load round snapshots (for Rewind feature)
                 st.session_state.round_snapshots = payload.get("round_snapshots", {})
                 # Load pending_decisions if present and matches current round
                 pd_payload = payload.get("pending_decisions")
                 if pd_payload:
-                    pd = RoundDecision.model_validate(pd_payload)
-                    if pd.round_num == loaded.round_num + 1:
-                        loaded_pending = pd
+                    try:
+                        pd = RoundDecision.model_validate(pd_payload)
+                        if pd.round_num == min(loaded.round_num + 1, 4):
+                            loaded_pending = pd
+                    except Exception:
+                        loaded_pending = None  # keep valid game state; discard stale input only
             except Exception as e:
                 st.warning(f"Save file corrupt — starting fresh. ({e})")
                 loaded = None
@@ -413,6 +436,8 @@ def init_state():
         st.session_state.bsc_history = []
     if "board_results" not in st.session_state:
         st.session_state.board_results = {}
+    if "gen_queries" not in st.session_state:
+        st.session_state.gen_queries = {}   # round -> personalized BoardQueryQuestion list
     if "pending_decisions" not in st.session_state:
         st.session_state.pending_decisions = loaded_pending
     if "prev_state_snapshot" not in st.session_state:
@@ -424,10 +449,15 @@ def init_state():
 def save_state():
     """Save via JSON (avoids pickle issues with Streamlit hot-reload).
     Also persists pending_decisions so R&D/Mkt/etc inputs survive reload."""
+    if auth_enabled():
+        gs.persist_session_to_db()
+        return
     payload = {
         "game_state": st.session_state.game_state.model_dump(),
         "bsc_history": st.session_state.bsc_history,
         "board_results": {str(k): v for k, v in st.session_state.board_results.items()},
+        "gen_queries": {str(k): [q.model_dump() for q in v]
+                        for k, v in st.session_state.gen_queries.items()},
         "pending_decisions": (st.session_state.pending_decisions.model_dump()
                               if st.session_state.pending_decisions else None),
         "round_snapshots": st.session_state.get("round_snapshots", {}),
@@ -442,11 +472,15 @@ def snapshot_current_round():
     if "round_snapshots" not in st.session_state:
         st.session_state.round_snapshots = {}
     rn = st.session_state.game_state.round_num
+    _snap_state = st.session_state.game_state.model_dump()
+    _snap_pending = (st.session_state.pending_decisions.model_dump()
+                     if st.session_state.pending_decisions else None)
     st.session_state.round_snapshots[str(rn)] = {
-        "state": st.session_state.game_state.model_dump(),
-        "pending": (st.session_state.pending_decisions.model_dump()
-                    if st.session_state.pending_decisions else None),
+        "state": _snap_state,
+        "pending": _snap_pending,
     }
+    if auth_enabled():
+        gs.persist_snapshot(rn, _snap_state, _snap_pending)
 
 
 def rewind_to_round(target_round: int):
@@ -481,12 +515,24 @@ def rewind_to_round(target_round: int):
     st.session_state.round_snapshots = {
         k: v for k, v in snapshots.items() if int(k) <= target_round
     }
+    st.session_state.gen_queries = {
+        k: v for k, v in st.session_state.gen_queries.items() if int(k) <= target_round
+    }
+    st.session_state.board_results = {
+        k: v for k, v in st.session_state.board_results.items() if int(k) <= target_round
+    }
+    if auth_enabled():
+        gs.rewind_db(target_round)   # prune the rewritten future in the DB too
     save_state()
     return True
 
 
 def autosave():
     """Save silently after every input change (called from on_change handlers)."""
+    # In SaaS mode, skip per-keystroke DB writes — session_state holds work in
+    # progress for the session, and explicit Save / Advance persist to Postgres.
+    if auth_enabled():
+        return
     try:
         save_state()
     except Exception:
@@ -494,9 +540,13 @@ def autosave():
 
 
 def reset_state():
+    if auth_enabled():
+        gs.reset_game_to_start()
+        return
     st.session_state.game_state = build_r0_state()
     st.session_state.bsc_history = []
     st.session_state.board_results = {}
+    st.session_state.gen_queries = {}
     st.session_state.pending_decisions = None
     st.session_state.prev_state_snapshot = None
     st.session_state.round_snapshots = {}
@@ -504,23 +554,35 @@ def reset_state():
         SAVE_PATH.unlink()
 
 
+# ============================================================
+# SAAS GATE — login + game selection (no-op in local study mode)
+# ============================================================
+init_cookies()   # build this run's cookie manager before any auth check
+require_login()
+if auth_enabled():
+    render_logout()               # sidebar: signed-in email + sign out
+    render_entitlement_badge()    # sidebar: full-access days left / demo notice
+    if not gs.current_game_id():
+        gs.render_game_hub()      # My Games screen — renders then st.stop()s
+    gs.render_hub_controls_in_sidebar()   # "← My Games" while a game is active
+
 init_state()
 state = st.session_state.game_state
-andrews = state.get_company("Andrews")
+apex = state.get_company("Apex")
 
 
 # ============================================================
-# HEADER (Capsim-style)
+# HEADER (BizSim-style)
 # ============================================================
 
 st.markdown(f"""
-<div class="compxm-header">
-    <div class="compxm-logo">
-        COMP-XM<span class="reg">®</span> INQUIRER
-        <span class="sub">2026 EXAM • ANDREWS CORPORATION</span>
+<div class="bizsim-header">
+    <div class="bizsim-logo">
+        BIZSIM
+        <span class="sub">BUSINESS STRATEGY SIMULATOR • APEX CORPORATION</span>
     </div>
     <div>
-        <span class="compxm-round-badge">ROUND {state.round_num} / 4</span>
+        <span class="bizsim-round-badge">ROUND {state.round_num} / 4</span>
         <span style="margin-left:12px; font-size:12px;">DEC 31, {state.year}</span>
     </div>
 </div>
@@ -531,7 +593,7 @@ st.markdown(f"""
 # ============================================================
 _top_save, _top_rewind, _top_rewind_btn, _top_info = st.columns([1, 2, 1, 4])
 with _top_save:
-    if st.button("💾 Save", key="top_save", help="Save current decisions to disk", use_container_width=True):
+    if st.button("💾 Save", key="top_save", help="Save current decisions to disk", width="stretch"):
         save_state()
         st.toast("✅ Saved!", icon="💾")
 with _top_rewind:
@@ -552,8 +614,10 @@ with _top_rewind_btn:
         # Extract round number from "Redo R{X+1} decisions"
         _target_decision_round = int(_rewind_choice.replace("Redo R", "").split()[0])
         _target_snapshot_round = _target_decision_round - 1
-        if st.button("⏮ Restore", key="top_rewind_btn", type="secondary", use_container_width=True,
-                     help=f"Restore state to before R{_target_decision_round} decisions"):
+        if st.button("⏮ Restore", key="top_rewind_btn", type="secondary", width="stretch",
+                     disabled=not can_rewind(),
+                     help=f"Restore state to before R{_target_decision_round} decisions"
+                          if can_rewind() else "Upgrade to use Rewind"):
             if rewind_to_round(_target_snapshot_round):
                 st.toast(f"⏮ Rewound — ready to redo R{_target_decision_round}", icon="🔙")
                 st.rerun()
@@ -561,20 +625,20 @@ with _top_rewind_btn:
                 st.error("Could not find snapshot")
 with _top_info:
     # Inline format (fmt_money not yet defined at this point in file)
-    _cash_m = andrews.cash / 1e6
-    _cash_str = f"${_cash_m:.1f}M" if abs(_cash_m) >= 1 else f"${andrews.cash/1e3:.0f}K"
+    _cash_m = apex.cash / 1e6
+    _cash_str = f"${_cash_m:.1f}M" if abs(_cash_m) >= 1 else f"${apex.cash/1e3:.0f}K"
     st.markdown(f"<div style='text-align:right; padding-top:8px; font-size:12px; color:#718096;'>"
-                f"Cash: <b>{_cash_str}</b> &middot; Stock: <b>${andrews.stock_price:.2f}</b> &middot; "
+                f"Cash: <b>{_cash_str}</b> &middot; Stock: <b>${apex.stock_price:.2f}</b> &middot; "
                 f"Snapshots: <b>{len(st.session_state.get('round_snapshots', {}))}</b></div>",
                 unsafe_allow_html=True)
 st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
 
 # ============================================================
-# TOP NAVIGATION TABS (mimics Capsim's top bar)
+# TOP NAVIGATION TABS (mimics BizSim's top bar)
 # ============================================================
 
-tab_dash, tab_rd, tab_mkt, tab_prod, tab_fin, tab_hr, tab_tqm, tab_inq, tab_icr, tab_bsc, tab_bq, tab_hist = st.tabs([
+tab_dash, tab_rd, tab_mkt, tab_prod, tab_fin, tab_hr, tab_tqm, tab_report, tab_icr, tab_bsc, tab_bq, tab_hist = st.tabs([
     "🏠 Dashboard",
     "⚗ R&D",
     "📢 Marketing",
@@ -582,7 +646,7 @@ tab_dash, tab_rd, tab_mkt, tab_prod, tab_fin, tab_hr, tab_tqm, tab_inq, tab_icr,
     "💰 Finance",
     "👥 HR",
     "🎯 TQM",
-    "📰 Inquirer",
+    "📰 Market Report",
     "📋 Industry Conditions",
     "📊 Scorecard",
     "❓ Board Queries",
@@ -614,7 +678,7 @@ def fmt_pct(x):
 
 
 def kpi_card(label, value, delta=None, direction=None):
-    """Render a Capsim-style KPI card."""
+    """Render a BizSim-style KPI card."""
     dir_class = direction or ""
     delta_html = ""
     if delta is not None:
@@ -635,12 +699,13 @@ def seg_pill(seg_name):
 
 
 def ensure_pending():
+    decision_round = min(state.round_num + 1, 4)
     if (st.session_state.pending_decisions is None
-            or st.session_state.pending_decisions.round_num != state.round_num + 1):
+            or st.session_state.pending_decisions.round_num != decision_round):
         # Pre-populate sensible defaults
-        # Production Schedule = Forecast - Inventory + 5% safety buffer (Capsim playbook)
+        # Production Schedule = Forecast - Inventory + 5% safety buffer (BizSim playbook)
         prod_decisions = []
-        for p in andrews.products:
+        for p in apex.products:
             seg = next((s for s in state.segments if s.name == p.primary_segment), None)
             growth = seg.growth_rate if seg else 0.10
             forecast = int(p.units_sold_last * (1 + growth))  # expected demand next year
@@ -657,11 +722,11 @@ def ensure_pending():
                 production_schedule=schedule,
             ))
         st.session_state.pending_decisions = RoundDecision(
-            round_num=state.round_num + 1,
+            round_num=decision_round,
             products=prod_decisions,
             hr=HRDecision(
-                recruit_spend=andrews.hr.recruit_spend or 2500,
-                training_hours=andrews.hr.training_hours or 40,
+                recruit_spend=apex.hr.recruit_spend,
+                training_hours=apex.hr.training_hours,
             ),
         )
     return st.session_state.pending_decisions
@@ -672,17 +737,10 @@ def ensure_pending():
 # ============================================================
 
 with tab_dash:
-    # Comp-XM Inquirer-style front-page banner
-    st.markdown(f"""
-    <div class="inq-paper">
-        <div class="inq-masthead">
-            <h1>COMP-XM&reg; INQUIRER</h1>
-            <div class="subtitle">Round {state.round_num} Report • Dec 31, {state.year} • Andrews Corp View</div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title">Dashboard Summary</div>', unsafe_allow_html=True)
 
-    # Selected Financial Statistics table (mimics R0 Inquirer Page 1)
-    st.markdown('<div class="inq-section-head">Selected Financial Statistics</div>', unsafe_allow_html=True)
+    # Selected Financial Statistics table (market report, page 1)
+    st.markdown('<div class="report-section-head">Selected Financial Statistics</div>', unsafe_allow_html=True)
 
     fin_df = pd.DataFrame({
         "Company": [c.name for c in state.companies],
@@ -697,30 +755,29 @@ with tab_dash:
         "Leverage": [f"{c.leverage:.2f}" for c in state.companies],
         "Emergency Loan": [fmt_money(c.emergency_loan) if c.emergency_loan > 0 else "$0" for c in state.companies],
     })
-    st.dataframe(fin_df, use_container_width=True, hide_index=True)
+    st.dataframe(fin_df, width="stretch", hide_index=True)
 
-    st.markdown('<div class="inq-page-marker">Page 1 — Front Page</div></div>', unsafe_allow_html=True)
 
-    # KPI strip — Andrews focus
-    st.markdown('<div class="capsim-section"><div class="capsim-section-title">Andrews Snapshot</div>', unsafe_allow_html=True)
+    # KPI strip — Apex focus
+    st.markdown('<div class="bizsim-section"><div class="bizsim-section-title">Apex Snapshot</div>', unsafe_allow_html=True)
 
     cols = st.columns(8)
-    delta_stock = andrews.stock_price - 95.38
+    delta_stock = apex.stock_price - 95.38
     delta_dir = "up" if delta_stock >= 0 else "down"
-    with cols[0]: kpi_card("Stock", f"${andrews.stock_price:.2f}", f"{'+' if delta_stock >= 0 else ''}${delta_stock:.2f} vs R0", delta_dir)
-    with cols[1]: kpi_card("Market Cap", fmt_money(andrews.market_cap))
-    with cols[2]: kpi_card("Cash", fmt_money(andrews.cash))
-    with cols[3]: kpi_card("Profit", fmt_money(andrews.profit_last))
-    with cols[4]: kpi_card("Cum Profit", fmt_money(andrews.cumulative_profit))
-    with cols[5]: kpi_card("ROS", fmt_pct(andrews.ros))
-    with cols[6]: kpi_card("ROE", fmt_pct(andrews.roe))
-    with cols[7]: kpi_card("S&P", andrews.sp_rating)
+    with cols[0]: kpi_card("Stock", f"${apex.stock_price:.2f}", f"{'+' if delta_stock >= 0 else ''}${delta_stock:.2f} vs R0", delta_dir)
+    with cols[1]: kpi_card("Market Cap", fmt_money(apex.market_cap))
+    with cols[2]: kpi_card("Cash", fmt_money(apex.cash))
+    with cols[3]: kpi_card("Profit", fmt_money(apex.profit_last))
+    with cols[4]: kpi_card("Cum Profit", fmt_money(apex.cumulative_profit))
+    with cols[5]: kpi_card("ROS", fmt_pct(apex.ros))
+    with cols[6]: kpi_card("ROE", fmt_pct(apex.roe))
+    with cols[7]: kpi_card("S&P", apex.sp_rating)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Perceptual Map (the most visually distinctive Comp-XM element)
+    # Perceptual Map
     col_map, col_pos = st.columns([3, 2])
     with col_map:
-        st.markdown('<div class="capsim-section"><div class="capsim-section-title">Perceptual Map — Current + Drift Trajectory</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bizsim-section"><div class="bizsim-section-title">Perceptual Map — Current + Drift Trajectory</div>', unsafe_allow_html=True)
 
         show_drift = st.checkbox("📍 Show segment ideal drift trajectory (R0 → R4)",
                                   value=True, key="show_drift",
@@ -793,8 +850,8 @@ with tab_dash:
                     )
 
         # Products
-        company_colors = {"Andrews": "#1a365d", "Baldwin": "#9b2c2c", "Chester": "#2c7a7b", "Digby": "#744210"}
-        company_symbols = {"Andrews": "circle", "Baldwin": "square", "Chester": "triangle-up", "Digby": "diamond"}
+        company_colors = {"Apex": "#1a365d", "Borealis": "#9b2c2c", "Crestline": "#2c7a7b", "Dynamo": "#744210"}
+        company_symbols = {"Apex": "circle", "Borealis": "square", "Crestline": "triangle-up", "Dynamo": "diamond"}
         for c in state.companies:
             xs = [p.pfmn for p in c.products]
             ys = [p.size for p in c.products]
@@ -820,7 +877,7 @@ with tab_dash:
             margin=dict(t=20, b=40, l=60, r=20),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         st.caption("⊕ Dashed circles = segment rough-cut • ◯ Gold ring = fine-cut zone • ⨯ = ideal spot • Dotted arrows = drift trajectory to R4")
 
         # Drift summary table
@@ -834,13 +891,13 @@ with tab_dash:
                     row[f"R{state.round_num + r}"] = f"({fp:.1f}, {fs:.1f})"
                 row["Drift/yr"] = f"({seg.drift_pfmn:+.1f}, {seg.drift_size:+.1f})"
                 drift_rows.append(row)
-            st.dataframe(pd.DataFrame(drift_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(drift_rows), width="stretch", hide_index=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_pos:
-        st.markdown('<div class="capsim-section"><div class="capsim-section-title">Andrews Products</div>', unsafe_allow_html=True)
-        for p in andrews.products:
+        st.markdown('<div class="bizsim-section"><div class="bizsim-section-title">Apex Products</div>', unsafe_allow_html=True)
+        for p in apex.products:
             seg = state.get_segment(p.primary_segment)
             health = "good" if p.age <= seg.ideal_age + 1 else ("warn" if p.age <= seg.ideal_age + 2.5 else "bad")
             st.markdown(f"""
@@ -854,11 +911,7 @@ with tab_dash:
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Stocks & Bonds (Inquirer Page 2)
-    st.markdown(f"""
-    <div class="inq-paper">
-        <div class="inq-section-head">Stocks & Bonds Summary — Page 2</div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title">Stocks & Bonds Summary</div>', unsafe_allow_html=True)
 
     col_st, col_bd = st.columns(2)
     with col_st:
@@ -873,7 +926,7 @@ with tab_dash:
             "Div": f"${c.dividend_per_share:.2f}",
             "P/E": f"{c.stock_price/max(0.01,c.eps):.1f}" if c.eps > 0 else "—",
         } for c in state.companies])
-        st.dataframe(stock_df, use_container_width=True, hide_index=True)
+        st.dataframe(stock_df, width="stretch", hide_index=True)
 
     with col_bd:
         st.markdown(f"**Bond Market** — Next Prime Rate {state.prime_interest_rate*100:.1f}%")
@@ -888,9 +941,8 @@ with tab_dash:
                     "Close": f"${b.market_close:.2f}",
                     "Rating": c.sp_rating,
                 })
-        st.dataframe(pd.DataFrame(bond_rows), use_container_width=True, hide_index=True, height=300)
+        st.dataframe(pd.DataFrame(bond_rows), width="stretch", hide_index=True, height=300)
 
-    st.markdown('<div class="inq-page-marker">Page 2 — Stocks & Bonds</div></div>', unsafe_allow_html=True)
 
 
 # ============================================================
@@ -898,10 +950,10 @@ with tab_dash:
 # ============================================================
 
 with tab_rd:
-    st.markdown('<div class=\"capsim-section-title\">' + ('Research & Development — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Research & Development — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"bizsim-section-title\">' + ('Research & Development — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Research & Development — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
-    st.caption("Capsim rules: Age halves at revise completion. Project duration ≈ 60 days + 180×distance. Cost ≈ $1M base + position move + MTBF change. Round starts Jan 1; products age +1yr automatically if no revise completes.")
+    st.caption("BizSim rules: Age halves when a repositioning project completes. Duration uses a 45-day floor + 175 days per map-distance unit, then automation, concurrency, and TQM adjustments. Cost starts at \\$1M plus position and MTBF changes.")
 
     from datetime import date, timedelta
     from math import sqrt
@@ -910,7 +962,7 @@ with tab_rd:
     round_start = date(state.year + 1, 1, 1)
     round_end = date(state.year + 1, 12, 31)
 
-    # Spreadsheet-like grid (mimics Capsim R&D spreadsheet) — 11 columns
+    # Spreadsheet-like grid (mimics BizSim R&D spreadsheet) — 11 columns
     col_widths = [1.2, 0.7, 0.7, 0.8, 0.7, 0.7, 0.7, 0.8, 1.3, 0.9, 1.0]
     cols_header = st.columns(col_widths)
     headers = ["Product", "Cur Pfmn", "Cur Size", "Cur MTBF", "Cur Age", "→ Pfmn", "→ Size", "→ MTBF", "Revision Date", "New Age", "Est. Cost"]
@@ -918,15 +970,15 @@ with tab_rd:
         with cols_header[i]:
             st.markdown(f"<div style='background:#1a365d; color:white; padding:6px 4px; font-size:10px; font-weight:700; text-align:center; letter-spacing:0.3px;'>{h}</div>", unsafe_allow_html=True)
 
-    for i, p in enumerate(andrews.products):
+    for i, p in enumerate(apex.products):
         seg = state.get_segment(p.primary_segment)
         future_pfmn = seg.center_pfmn + seg.drift_pfmn + seg.ideal_offset_pfmn
         future_size = seg.center_size + seg.drift_size + seg.ideal_offset_size
 
         # Compute smart default (used only if pending has no saved value)
         ideal_dist = sqrt((future_pfmn - p.pfmn)**2 + (future_size - p.size)**2)
-        tqm_factor_default = 1 + andrews.tqm.rd_cycle_time_reduction
-        max_reachable_dist = (270 / 180) / tqm_factor_default if tqm_factor_default > 0 else (270/180)
+        tqm_factor_default = 1 + apex.tqm.rd_cycle_time_reduction
+        max_reachable_dist = (270 / 175) / tqm_factor_default if tqm_factor_default > 0 else (270/175)
         if ideal_dist > max_reachable_dist and ideal_dist > 0:
             scale = max_reachable_dist / ideal_dist
             smart_p = round(p.pfmn + (future_pfmn - p.pfmn) * scale, 1)
@@ -969,8 +1021,17 @@ with tab_rd:
         dist = sqrt((new_p - p.pfmn)**2 + (new_s - p.size)**2)
         # Apply TQM R&D cycle reduction (rd_cycle_time_reduction is NEGATIVE, e.g., -0.40)
         # So tqm_factor = 1 + reduction gives <1 (shorter days) when TQM invested
-        tqm_factor = 1 + andrews.tqm.rd_cycle_time_reduction
-        days = int((60 + dist * 180) * tqm_factor)
+        tqm_factor = 1 + apex.tqm.rd_cycle_time_reduction
+        from sim.engines.rd import rd_project_days
+        concurrent_count = max(1, sum(
+            1 for _pd in pending.products
+            if _pd.new_pfmn is not None or _pd.new_size is not None or _pd.new_mtbf is not None
+        ))
+        days = rd_project_days(
+            p, new_p, new_s,
+            rd_cycle_reduction=max(0.0, -apex.tqm.rd_cycle_time_reduction),
+            concurrent_projects=concurrent_count,
+        )
         cost = 1_000_000 + dist * 500_000 + abs(new_m - p.mtbf) / 1000 * 5000
 
         if is_revising:
@@ -1024,7 +1085,7 @@ with tab_rd:
 
     # Segment drift forecast — matches Industry Conditions Report convention
     # Table A: Centers per round  +  Table B: Ideal Offsets (constant)
-    st.markdown('<div class="capsim-section-title" style="margin-top:20px;">📍 Segment Centers per Round (Industry Conditions Report Table 2)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title" style="margin-top:20px;">📍 Segment Centers per Round (Industry Conditions Report Table 2)</div>', unsafe_allow_html=True)
     st.caption("Segment **centers** drift each year by the rates below. Customer **ideal spot** = Center + Ideal Offset (offset is constant — see Table B).")
 
     center_rows = []
@@ -1039,9 +1100,9 @@ with tab_rd:
             row[f"R{state.round_num + r_ahead}"] = f"({cp:.1f}, {cs:.1f})"
         row["Drift/year"] = f"({seg.drift_pfmn:+.1f}, {seg.drift_size:+.1f})"
         center_rows.append(row)
-    st.dataframe(pd.DataFrame(center_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(center_rows), width="stretch", hide_index=True)
 
-    st.markdown('<div class="capsim-section-title" style="margin-top:16px;">📍 Ideal Spot Offsets (Industry Conditions Report Table 3 — Constant)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">📍 Ideal Spot Offsets (Industry Conditions Report Table 3 — Constant)</div>', unsafe_allow_html=True)
     st.caption("These offsets do NOT change between rounds. Customers prefer products at (Center + Offset).")
 
     offset_rows = []
@@ -1059,7 +1120,7 @@ with tab_rd:
                 "Elite": "Strong bias toward faster (perf matters more than size)",
             }.get(seg.name, "—"),
         })
-    st.dataframe(pd.DataFrame(offset_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(offset_rows), width="stretch", hide_index=True)
 
     st.markdown("""
     <div style='font-size:11px; color:#4a5568; padding:8px 12px; background:#fef5e7; border-left:3px solid #d69e2e; margin-top:8px;'>
@@ -1075,10 +1136,10 @@ with tab_rd:
 # ============================================================
 
 with tab_mkt:
-    st.markdown('<div class=\"capsim-section-title\">' + ('Marketing — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Marketing — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"bizsim-section-title\">' + ('Marketing — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Marketing — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
-    st.caption("Promo: $1.4M maintain / $2M grow / $3M cap • Sales: $3M/product or $4.5M combined / segment")
+    st.caption("Promo: \\$1.4M maintain / \\$2M grow / \\$3M cap • Sales: \\$3M/product or \\$4.5M combined / segment")
 
     # Headers: now 8 cols (added Forecast)
     col_widths_mkt = [1.0, 0.7, 0.9, 1.1, 1.1, 1.0, 0.8, 0.8]
@@ -1087,7 +1148,7 @@ with tab_mkt:
         with cols_h[i]:
             st.markdown(f"<div style='background:#1a365d; color:white; padding:6px; font-size:11px; font-weight:700; text-align:center;'>{h}</div>", unsafe_allow_html=True)
 
-    for i, p in enumerate(andrews.products):
+    for i, p in enumerate(apex.products):
         seg = state.get_segment(p.primary_segment)
 
         # READ FROM PENDING FIRST — preserve user inputs across refresh
@@ -1157,10 +1218,10 @@ with tab_mkt:
     """, unsafe_allow_html=True)
 
     # === PLAYBOOK RECOMMENDED FORECAST TABLE ===
-    st.markdown('<div class="capsim-section-title" style="margin-top:16px;">📚 Playbook Recommended Forecasts (Pessimistic + Optimistic)</div>', unsafe_allow_html=True)
-    st.caption("Strategy: ใส่ **Pessimistic** ใน Forecast field (BSC accuracy safe) • ใส่ **Optimistic** ใน Production Schedule (no stockout)")
+    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">📚 Playbook Recommended Forecasts (Pessimistic + Optimistic)</div>', unsafe_allow_html=True)
+    st.caption("Strategy: use **Pessimistic** in Forecast for safer BSC accuracy, and **Optimistic** in Production Schedule to reduce stockout risk.")
     rec_rows = []
-    for p in andrews.products:
+    for p in apex.products:
         seg = state.get_segment(p.primary_segment)
         base = int(max(p.units_sold_last, 100) * (1 + seg.growth_rate))
         rec_rows.append({
@@ -1171,7 +1232,7 @@ with tab_mkt:
             "Pessimistic (90%) → Forecast": f"{int(base * 0.90):,}",
             "Optimistic (115%) → Production": f"{int(base * 1.15):,}",
         })
-    st.dataframe(pd.DataFrame(rec_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rec_rows), width="stretch", hide_index=True)
     st.caption("💡 If you revise + reduce price + run TQM/QFD, ADD +5-10% bonus before splitting into Pessimistic/Optimistic.")
 
 
@@ -1180,10 +1241,10 @@ with tab_mkt:
 # ============================================================
 
 with tab_prod:
-    st.markdown('<div class=\"capsim-section-title\">' + ('Production — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Production — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"bizsim-section-title\">' + ('Production — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Production — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
-    st.caption("Capacity in 000s units. 1 shift = 100% util, 2 shifts = 200% max. Automation 1-10 ($4/unit/level).")
+    st.caption("Capacity in 000s units. 1 shift = 100% util, 2 shifts = 200% max. Automation 1-10 (\\$4/unit/level).")
 
     cols_h = st.columns([1.2, 0.9, 1, 1, 1.2, 1.2, 1, 1.2])
     for i, h in enumerate(["Product", "Seg", "Inv", "Capacity", "Production Sched", "New Automation", "Cap Δ (±000)", "Plant Cost"]):
@@ -1193,7 +1254,7 @@ with tab_prod:
     from sim.engines.production import plant_value, capacity_purchase_cost, automation_upgrade_cost, capacity_sell_value
 
     total_capex = 0
-    for i, p in enumerate(andrews.products):
+    for i, p in enumerate(apex.products):
         cols_r = st.columns([1.2, 0.9, 1, 1, 1.2, 1.2, 1, 1.2])
         with cols_r[0]: st.markdown(f"<div style='padding-top:8px;'><b>{p.name}</b></div>", unsafe_allow_html=True)
         with cols_r[1]: st.markdown(f"<div style='padding-top:6px;'>{seg_pill(p.primary_segment)}</div>", unsafe_allow_html=True)
@@ -1209,7 +1270,7 @@ with tab_prod:
                          else (int(forecast * 1.1) if forecast else int(p.capacity_first_shift * 1.5)))
         default_prod = min(default_prod, p.capacity_first_shift * 2)
         default_auto = saved_auto if saved_auto is not None else float(p.automation)
-        default_cap = saved_cap if saved_cap else 0
+        default_cap = saved_cap
 
         with cols_r[4]:
             # Effective cap = base + cap_change (so cap buy expands max input)
@@ -1275,9 +1336,9 @@ with tab_prod:
     # SCHEDULE SUMMARY — Forecast vs Production vs Utilization
     # ============================================================
     from sim.engines.production import labor_cost_factor as _lcf, SECOND_SHIFT_LABOR_MULTIPLIER, INVENTORY_CARRY_PCT
-    st.markdown('<div class="capsim-section-title" style="margin-top:20px;">📋 Schedule Summary (Forecast → Production → Utilization)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title" style="margin-top:20px;">📋 Schedule Summary (Forecast → Production → Utilization)</div>', unsafe_allow_html=True)
     sched_rows = []
-    for i, p in enumerate(andrews.products):
+    for i, p in enumerate(apex.products):
         fc = pending.products[i].forecast or 0
         prod_sched = pending.products[i].production_schedule or 0
         # EFFECTIVE capacity after sell/buy (cap_change applied)
@@ -1303,19 +1364,19 @@ with tab_prod:
             "Util %": f"{util:.0f}%",
             "2nd Shift %": f"{second_pct:.0f}%",
         })
-    st.dataframe(pd.DataFrame(sched_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(sched_rows), width="stretch", hide_index=True)
     st.caption("💡 Util % uses EFFECTIVE capacity (after cap sell/buy). 100-150% = sweet spot. >150% = 2nd shift (+50% labor). <100% = wasted.")
 
     # ============================================================
     # MARGINS — Per-unit costs and contribution
     # ============================================================
-    st.markdown('<div class="capsim-section-title" style="margin-top:16px;">📊 Margins (Per-Unit Cost Breakdown)</div>', unsafe_allow_html=True)
-    pi = andrews.hr.productivity_index
-    tqm_mat = andrews.tqm.material_cost_reduction
-    tqm_lab = andrews.tqm.labor_cost_reduction
+    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">📊 Margins (Per-Unit Cost Breakdown)</div>', unsafe_allow_html=True)
+    pi = apex.hr.productivity_index
+    tqm_mat = apex.tqm.material_cost_reduction
+    tqm_lab = apex.tqm.labor_cost_reduction
 
     margin_rows = []
-    for i, p in enumerate(andrews.products):
+    for i, p in enumerate(apex.products):
         # Effective labor (with HR + TQM)
         eff_labor = p.labor_cost / max(0.5, pi) * (1 + tqm_lab)
         # Use EFFECTIVE capacity (after cap_change)
@@ -1339,20 +1400,20 @@ with tab_prod:
             "Total Variable": f"${total_var:.2f}",
             "Contribution Margin %": f"{cm_pct:.1f}%",
         })
-    st.dataframe(pd.DataFrame(margin_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(margin_rows), width="stretch", hide_index=True)
     st.caption(f"Includes HR Productivity Index ({pi:.3f}) and TQM Material/Labor reductions ({tqm_mat*100:.1f}% / {tqm_lab*100:.1f}%).")
 
     # ============================================================
     # WORKFORCE SUMMARY
     # ============================================================
-    st.markdown('<div class="capsim-section-title" style="margin-top:16px;">👥 Workforce Summary</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">👥 Workforce Summary</div>', unsafe_allow_html=True)
     # Estimate needed employees from scheduled production
     total_prod = sum((pd.production_schedule or 0) for pd in pending.products)
     needed = max(50, int(total_prod * 0.144))
-    current = andrews.hr.workforce_complement
-    new_hires = max(0, needed - int(current * (1 - andrews.hr.turnover_rate)))
-    separated = int(current * andrews.hr.turnover_rate)
-    first_shift_needed = int(sum(p.capacity_first_shift for p in andrews.products) * 0.144)
+    current = apex.hr.workforce_complement
+    new_hires = max(0, needed - int(current * (1 - apex.hr.turnover_rate)))
+    separated = int(current * apex.hr.turnover_rate)
+    first_shift_needed = int(sum(p.capacity_first_shift for p in apex.products) * 0.144)
     second_shift_needed = max(0, needed - first_shift_needed)
 
     wf_cols = st.columns(4)
@@ -1361,13 +1422,13 @@ with tab_prod:
         kpi_card("New Employees", f"{new_hires:,}")
     with wf_cols[1]:
         kpi_card("Needed This Year", f"{needed:,}")
-        kpi_card("Separated", f"{separated:,}", f"turnover {andrews.hr.turnover_rate*100:.1f}%")
+        kpi_card("Separated", f"{separated:,}", f"turnover {apex.hr.turnover_rate*100:.1f}%")
     with wf_cols[2]:
         kpi_card("1st Shift Needed", f"{first_shift_needed:,}")
-        kpi_card("Productivity Index", f"{andrews.hr.productivity_index:.3f}")
+        kpi_card("Productivity Index", f"{apex.hr.productivity_index:.3f}")
     with wf_cols[3]:
         kpi_card("2nd Shift Needed", f"{second_shift_needed:,}")
-        kpi_card("Turnover Rate", f"{andrews.hr.turnover_rate*100:.1f}%")
+        kpi_card("Turnover Rate", f"{apex.hr.turnover_rate*100:.1f}%")
 
 
 # ============================================================
@@ -1375,7 +1436,7 @@ with tab_prod:
 # ============================================================
 
 with tab_fin:
-    st.markdown('<div class=\"capsim-section-title\">' + ('Finance — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Finance — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"bizsim-section-title\">' + ('Finance — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Finance — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     col_bnd, col_stk = st.columns(2)
@@ -1388,46 +1449,52 @@ with tab_fin:
             "Coupon": f"{b.coupon_rate*100:.1f}%",
             "Due": b.year_due,
             "Close$": f"${b.market_close:.2f}",
-        } for b in andrews.bonds])
-        st.dataframe(bond_df, use_container_width=True, hide_index=True)
+        } for b in apex.bonds])
+        st.dataframe(bond_df, width="stretch", hide_index=True)
 
-        retire_options = [b.series for b in andrews.bonds]
+        retire_options = [b.series for b in apex.bonds]
         saved_retire = pending.finance.retire_bond_early or []
-        retire_default = [s for s in saved_retire if s in retire_options] if saved_retire else \
-                          [b.series for b in andrews.bonds if b.year_due <= state.year + 2]
+        retire_default = [s for s in saved_retire if s in retire_options]
         retire_selected = st.multiselect(
             "Retire bonds early (1.5% fee)",
             retire_options,
             default=retire_default,
-            help="Recommended: retire 13.5S2027 to save interest before maturity",
+            help="Optional. Compare the market premium, 1.5% fee, and interest saved before selecting.",
         )
         saved_issue_bond = pending.finance.issue_bond
         new_bond_m = st.number_input("Issue new bond ($M)", min_value=0.0, max_value=50.0,
                                       value=saved_issue_bond / 1_000_000, step=0.5, format="%.1f",
                                       help="In $M. 5% brokerage fee. Rate = current LT + 1.4%")
         new_bond = int(new_bond_m * 1_000_000)
+        current_debt_m = st.number_input(
+            "Current debt to borrow ($M)", min_value=0.0, max_value=100.0,
+            value=pending.finance.current_debt_borrow / 1_000_000,
+            step=0.5, format="%.1f",
+            help="One-year borrowing; existing current debt is repaid automatically.",
+        )
+        current_debt_borrow = int(current_debt_m * 1_000_000)
 
     with col_stk:
         st.markdown("##### Stock & Dividend")
-        st.write(f"Current price: **${andrews.stock_price:.2f}** • Shares out: {andrews.shares_outstanding:,} • Book value/share: ${andrews.book_value_per_share:.2f}")
+        st.write(f"Current price: **${apex.stock_price:.2f}** • Shares out: {apex.shares_outstanding:,} • Book value/share: ${apex.book_value_per_share:.2f}")
         saved_div = pending.finance.dividend_per_share
-        default_div = saved_div if saved_div else float(andrews.dividend_per_share or 6.50)
+        default_div = saved_div
         dividend = st.number_input("Dividend per share ($)", min_value=0.0, max_value=20.0,
                                     value=default_div, step=0.25,
                                     format="%.2f",
-                                    help=f"Cash out = {andrews.shares_outstanding:,} shares × dividend")
-        st.caption(f"Estimated dividend total: {fmt_money(dividend * andrews.shares_outstanding)}")
+                                    help=f"Cash out = {apex.shares_outstanding:,} shares × dividend")
+        st.caption(f"Estimated dividend total: {fmt_money(dividend * apex.shares_outstanding)}")
 
         saved_issue_stk = pending.finance.issue_stock
         issue_stk_m = st.number_input("Issue stock ($M)", min_value=0.0, max_value=50.0,
                                        value=saved_issue_stk / 1_000_000, step=0.5, format="%.1f",
-                                       help="In $M. $500K fee. Dilutes shares.")
+                                       help="In $M gross. 5% fee; new shares capped at 20% of shares outstanding.")
         issue_stk = int(issue_stk_m * 1_000_000)
 
         saved_buyback = pending.finance.buyback_stock
         buyback_stk_m = st.number_input("Buyback stock ($M)", min_value=0.0, max_value=20.0,
                                          value=saved_buyback / 1_000_000, step=0.5, format="%.1f",
-                                         help="In $M. At current market price")
+                                         help="In $M. 1.5% fee; capped at 5% of shares outstanding.")
         buyback_stk = int(buyback_stk_m * 1_000_000)
 
     # Policy Lag (AR/AP days)
@@ -1435,12 +1502,17 @@ with tab_fin:
     col_ar, col_ap = st.columns(2)
     with col_ar:
         ar_lag = st.slider("Accounts Receivable Lag (days)", min_value=0, max_value=140,
-                            value=pending.finance.accounts_receivable_lag or 30, step=15,
-                            help="Days customers take to pay. Lower = cash collected faster. 30 = standard.")
+                            value=pending.finance.accounts_receivable_lag, step=15,
+                            help="Days customers take to pay. Generous terms LIFT demand; "
+                                 "tightening frees cash but cuts your customer-survey score: "
+                                 "90d = 0 penalty, 60d = −0.7%, 30d = −7%, 0d (COD) = −40%.")
     with col_ap:
         ap_lag = st.slider("Accounts Payable Lag (days)", min_value=0, max_value=140,
-                            value=pending.finance.accounts_payable_lag or 30, step=15,
-                            help="Days you take to pay suppliers. Higher = cash kept longer. 30 = standard.")
+                            value=pending.finance.accounts_payable_lag, step=15,
+                            help="Days you take to pay suppliers. Keeps cash longer, but "
+                                 "stretching past 60d makes vendors WITHHOLD material and "
+                                 "starve production: 60d ≈ −8% output, 90d ≈ −26%, 140d = zero. "
+                                 "Keep at 30 unless you know you have spare capacity.")
 
     pending.finance = FinanceDecision(
         retire_bond_early=retire_selected,
@@ -1448,6 +1520,7 @@ with tab_fin:
         issue_stock=issue_stk,
         buyback_stock=buyback_stk,
         dividend_per_share=dividend,
+        current_debt_borrow=current_debt_borrow,
         accounts_receivable_lag=ar_lag,
         accounts_payable_lag=ap_lag,
     )
@@ -1458,29 +1531,36 @@ with tab_fin:
     st.divider()
     cf_col, lb_col = st.columns([3, 2])
     with cf_col:
-        st.markdown('<div class="capsim-section-title">💵 Projected Cash Flow Summary</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bizsim-section-title">💵 Projected Cash Flow Summary</div>', unsafe_allow_html=True)
         # Compute projected components using FULL P&L simulation that reflects
         # pending HR / TQM / Marketing / R&D / Price decisions
-        from sim.engines.finance import project_next_round_pl
+        from sim.engines.finance import max_new_bond_capacity, project_next_round_pl
         from sim.engines.production import capacity_purchase_cost, automation_upgrade_cost
-        starting_cash = andrews.cash
-        proj = project_next_round_pl(state, andrews, pending)
+        starting_cash = apex.cash
+        proj = project_next_round_pl(state, apex, pending)
         proj_operating = proj["cash_from_operations"]
         # Investing: capex (capacity buy + automation upgrade)
         proj_investing = 0
         for pd_ in pending.products:
-            prod = next(pp for pp in andrews.products if pp.name == pd_.product_name)
+            prod = next(pp for pp in apex.products if pp.name == pd_.product_name)
             if pd_.new_automation and pd_.new_automation > prod.automation:
                 proj_investing -= automation_upgrade_cost(prod.capacity_first_shift, prod.automation, pd_.new_automation)
             if pd_.capacity_change and pd_.capacity_change > 0:
                 proj_investing -= capacity_purchase_cost(pd_.capacity_change, pd_.new_automation or prod.automation)
+            elif pd_.capacity_change and pd_.capacity_change < 0:
+                proj_investing += capacity_sell_value(-pd_.capacity_change, prod.automation)
         # Financing: dividend + bond issue/retire + stock issue/buyback - current_debt change
-        div_total = dividend * andrews.shares_outstanding
-        bond_issued = new_bond * (1 - 0.05)  # net after fee
-        bond_retired = sum(b.face_value * (b.market_close/100 + 0.015) for b in andrews.bonds if b.series in retire_selected)
-        repay_current = andrews.current_debt
-        proj_financing = bond_issued + issue_stk * (1 - 500_000/max(1, issue_stk) if issue_stk > 0 else 0) \
-                          - buyback_stk - div_total - bond_retired - repay_current
+        div_total = dividend * apex.shares_outstanding
+        actual_bond = min(new_bond, max_new_bond_capacity(apex))
+        bond_issued = actual_bond * (1 - 0.05)
+        bond_retired = sum(b.face_value * (b.market_close/100 + 0.015) for b in apex.bonds if b.series in retire_selected)
+        repay_current = apex.current_debt
+        max_issue_gross = int(apex.shares_outstanding * 0.20) * max(0, apex.stock_price)
+        max_buyback = int(apex.shares_outstanding * 0.05) * max(0, apex.stock_price)
+        stock_issue_net = min(issue_stk, max_issue_gross) * 0.95
+        buyback_out = min(buyback_stk, max_buyback) * 1.015
+        proj_financing = bond_issued + stock_issue_net - buyback_out \
+                          - div_total - bond_retired - repay_current + current_debt_borrow
         closing_cash = starting_cash + proj_operating + proj_investing + proj_financing
 
         cf_rows = pd.DataFrame([
@@ -1492,7 +1572,7 @@ with tab_fin:
             {"Item": "Cash from Financing", "Amount": fmt_money(proj_financing)},
             {"Item": "Closing Cash Position (Dec 31)", "Amount": fmt_money(closing_cash)},
         ])
-        st.dataframe(cf_rows, use_container_width=True, hide_index=True)
+        st.dataframe(cf_rows, width="stretch", hide_index=True)
 
         # Breakdown showing HR/TQM/Marketing impact
         with st.expander("🔍 Projected P&L breakdown (where HR/TQM/Marketing show up)"):
@@ -1512,26 +1592,26 @@ with tab_fin:
                 {"Line": "− Tax (35%)", "Amount": fmt_money(-proj['taxes'])},
                 {"Line": "= Net Profit", "Amount": fmt_money(proj['net_profit'])},
             ])
-            st.dataframe(pl_rows, use_container_width=True, hide_index=True)
+            st.dataframe(pl_rows, width="stretch", hide_index=True)
         st.caption("✅ NOW reflects pending HR / TQM / Marketing / R&D / Price changes. Still approximate — actual round may differ on sales realized & AR/AP changes.")
 
     with lb_col:
-        st.markdown('<div class="capsim-section-title">🥧 Liabilities & Owner\'s Equity</div>', unsafe_allow_html=True)
-        ap_val = andrews.accounts_payable
-        cd_val = andrews.current_debt
-        ltd_val = sum(b.face_value for b in andrews.bonds)
-        cs_val = andrews.common_stock
-        re_val = andrews.retained_earnings
+        st.markdown('<div class="bizsim-section-title">🥧 Liabilities & Owner\'s Equity</div>', unsafe_allow_html=True)
+        ap_val = apex.accounts_payable
+        cd_val = apex.current_debt
+        ltd_val = sum(b.face_value for b in apex.bonds)
+        cs_val = apex.common_stock
+        re_val = apex.retained_earnings
         labels = ["Accounts Payable", "Current Debt", "Long-Term Debt", "Common Stock", "Retained Earnings"]
         values = [ap_val, cd_val, ltd_val, cs_val, re_val]
         colors = ["#2caffe", "#544fc5", "#00e272", "#fe6a35", "#6b8abc"]
         fig = go.Figure(data=[go.Pie(labels=labels, values=values, marker=dict(colors=colors), hole=0.4)])
         fig.update_layout(height=300, margin=dict(t=10, b=10), showlegend=True,
                           legend=dict(orientation="v", x=1.05, y=0.5))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # Outstanding Bonds detail
-    st.markdown('<div class="capsim-section-title">📜 Outstanding Bonds</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title">📜 Outstanding Bonds</div>', unsafe_allow_html=True)
     outst_bonds = pd.DataFrame([{
         "Series": b.series,
         "Face Amount": fmt_money(b.face_value),
@@ -1539,8 +1619,8 @@ with tab_fin:
         "Closing Price": f"${b.market_close:.2f}",
         "Year Due": b.year_due,
         "Status": "⚠ Matures next round!" if b.year_due <= state.year + 1 else "ok"
-    } for b in andrews.bonds])
-    st.dataframe(outst_bonds, use_container_width=True, hide_index=True)
+    } for b in apex.bonds])
+    st.dataframe(outst_bonds, width="stretch", hide_index=True)
 
 
 # ============================================================
@@ -1548,14 +1628,14 @@ with tab_fin:
 # ============================================================
 
 with tab_hr:
-    st.markdown('<div class=\"capsim-section-title\">' + ('Human Resources — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Human Resources — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"bizsim-section-title\">' + ('Human Resources — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Human Resources — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
-    st.caption("OLD Comp-XM HR module: Recruit Spend ($0-$5K) + Training Hours (0-80hr × $20). Workforce Complement set on Production page.")
+    st.caption("HR module: Recruit Spend (\\$0-\\$5K) + Training Hours (0-80hr × \\$20). Workforce Complement is set on the Production page.")
 
     # READ FROM PENDING FIRST
-    default_recruit = int(pending.hr.recruit_spend) if pending.hr.recruit_spend else 2500
-    default_training = pending.hr.training_hours if pending.hr.training_hours else 40
+    default_recruit = int(pending.hr.recruit_spend)
+    default_training = pending.hr.training_hours
 
     col_r, col_t = st.columns(2)
     with col_r:
@@ -1569,14 +1649,14 @@ with tab_hr:
 
     # Captions computed AFTER both sliders set (so we can use both values)
     _turnover_now = 0.10 - 0.05 * (training / 80)
-    _separated = int(andrews.hr.workforce_complement * _turnover_now)
+    _separated = int(apex.hr.workforce_complement * _turnover_now)
     _new_hires = max(0, _separated)  # at minimum replace separated
     _rec_cost = _new_hires * (1000 + recruit)
-    _train_cost = training * 20 * andrews.hr.workforce_complement
+    _train_cost = training * 20 * apex.hr.workforce_complement
     with col_r:
-        st.caption(f"~{_new_hires} new hires (turnover {_turnover_now*100:.0f}% of {andrews.hr.workforce_complement}) × \\${1000 + recruit:,} = **{fmt_money(_rec_cost)}/yr**")
+        st.caption(f"~{_new_hires} new hires (turnover {_turnover_now*100:.0f}% of {apex.hr.workforce_complement}) × \\${1000 + recruit:,} = **{fmt_money(_rec_cost)}/yr**")
     with col_t:
-        st.caption(f"{andrews.hr.workforce_complement} employees × {training}hr × \\$20 = **{fmt_money(_train_cost)}/yr**")
+        st.caption(f"{apex.hr.workforce_complement} employees × {training}hr × \\$20 = **{fmt_money(_train_cost)}/yr**")
     st.caption(f"💰 **Total HR Cost projected**: Recruit {fmt_money(_rec_cost)} + Training {fmt_money(_train_cost)} = **{fmt_money(_rec_cost + _train_cost)}**")
 
     pi_new = 1.0 + 0.09 * (recruit/5000) + 0.09 * (training/80)
@@ -1586,8 +1666,8 @@ with tab_hr:
     # Estimate new hires from scheduled production
     total_prod_for_hr = sum((pdec.production_schedule or 0) for pdec in pending.products) or 1
     needed_emp = max(50, int(total_prod_for_hr * 0.144))
-    est_separated = int(andrews.hr.workforce_complement * turnover_new)
-    est_new_hires = max(0, needed_emp - (andrews.hr.workforce_complement - est_separated))
+    est_separated = int(apex.hr.workforce_complement * turnover_new)
+    est_new_hires = max(0, needed_emp - (apex.hr.workforce_complement - est_separated))
     hr_admin_cost = training * 20 * needed_emp + (recruit + 1000) * est_new_hires
 
     pending.hr = HRDecision(recruit_spend=recruit, training_hours=training)
@@ -1598,29 +1678,29 @@ with tab_hr:
     st.divider()
     imp_col1, imp_col2 = st.columns(2)
     with imp_col1:
-        st.markdown('<div class="capsim-section-title">📅 Yearly Impacts (this round\'s decision)</div>', unsafe_allow_html=True)
-        pi_delta = pi_new - andrews.hr.productivity_index
-        turnover_delta = turnover_new - andrews.hr.turnover_rate
+        st.markdown('<div class="bizsim-section-title">📅 Yearly Impacts (this round\'s decision)</div>', unsafe_allow_html=True)
+        pi_delta = pi_new - apex.hr.productivity_index
+        turnover_delta = turnover_new - apex.hr.turnover_rate
         yi_df = pd.DataFrame([
             {"Metric": "Productivity Index", "Change": f"{pi_delta:+.3f}", "New Value": f"{pi_new:.3f}"},
             {"Metric": "Turnover Rate", "Change": f"{turnover_delta*100:+.1f}%", "New Value": f"{turnover_new*100:.1f}%"},
             {"Metric": "Recruiting Cost", "Change": "—", "New Value": fmt_money((recruit + 1000) * 200)},
-            {"Metric": "Training Cost", "Change": "—", "New Value": fmt_money(training * 20 * andrews.hr.workforce_complement)},
+            {"Metric": "Training Cost", "Change": "—", "New Value": fmt_money(training * 20 * apex.hr.workforce_complement)},
             {"Metric": "Total HR Admin", "Change": "—", "New Value": fmt_money(hr_admin_cost)},
         ])
-        st.dataframe(yi_df, use_container_width=True, hide_index=True)
+        st.dataframe(yi_df, width="stretch", hide_index=True)
 
     with imp_col2:
-        st.markdown('<div class="capsim-section-title">📈 Cumulative HR State</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bizsim-section-title">📈 Cumulative HR State</div>', unsafe_allow_html=True)
         ci_df = pd.DataFrame([
-            {"Metric": "Workforce Complement", "Value": f"{andrews.hr.workforce_complement:,}"},
-            {"Metric": "1st Shift", "Value": f"{andrews.hr.first_shift_complement:,}"},
-            {"Metric": "2nd Shift", "Value": f"{andrews.hr.second_shift_complement:,}"},
-            {"Metric": "Productivity Index (current)", "Value": f"{andrews.hr.productivity_index:.3f}"},
-            {"Metric": "Turnover Rate (current)", "Value": f"{andrews.hr.turnover_rate*100:.1f}%"},
-            {"Metric": "Total HR Admin Cost (last yr)", "Value": fmt_money(andrews.hr.total_hr_admin_cost)},
+            {"Metric": "Workforce Complement", "Value": f"{apex.hr.workforce_complement:,}"},
+            {"Metric": "1st Shift", "Value": f"{apex.hr.first_shift_complement:,}"},
+            {"Metric": "2nd Shift", "Value": f"{apex.hr.second_shift_complement:,}"},
+            {"Metric": "Productivity Index (current)", "Value": f"{apex.hr.productivity_index:.3f}"},
+            {"Metric": "Turnover Rate (current)", "Value": f"{apex.hr.turnover_rate*100:.1f}%"},
+            {"Metric": "Total HR Admin Cost (last yr)", "Value": fmt_money(apex.hr.total_hr_admin_cost)},
         ])
-        st.dataframe(ci_df, use_container_width=True, hide_index=True)
+        st.dataframe(ci_df, width="stretch", hide_index=True)
 
 
 # ============================================================
@@ -1628,10 +1708,10 @@ with tab_hr:
 # ============================================================
 
 with tab_tqm:
-    st.markdown('<div class=\"capsim-section-title\">' + ('Total Quality Management — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Total Quality Management — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"bizsim-section-title\">' + ('Total Quality Management — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Total Quality Management — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
-    st.caption("10 initiatives, $0-$2M per round each, $4M cumulative cap per initiative. S-curve response.")
+    st.caption("10 initiatives, \\$0-\\$2M per round each, \\$4M cumulative cap per initiative. S-curve response.")
 
     rec = recommended_initiatives_for_round(state.round_num + 1)
     if rec:
@@ -1643,7 +1723,7 @@ with tab_tqm:
     saved_tqm = pending.tqm.initiatives or {}
     for idx, name in enumerate(INITIATIVE_NAMES):
         with cols[idx % 2]:
-            cumulative = andrews.tqm.cumulative_spend.get(name, 0)
+            cumulative = apex.tqm.cumulative_spend.get(name, 0)
             # READ FROM PENDING FIRST, then recommended default
             saved_amt = saved_tqm.get(name)
             default_amt = saved_amt if saved_amt is not None else rec.get(name, 0)
@@ -1672,9 +1752,9 @@ with tab_tqm:
 
     imp_col1, imp_col2 = st.columns(2)
     with imp_col1:
-        st.markdown('<div class="capsim-section-title">📅 Yearly Impacts (this round\'s spend → projected)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bizsim-section-title">📅 Yearly Impacts (this round\'s spend → projected)</div>', unsafe_allow_html=True)
         # Simulate what cumulative impacts will be AFTER applying this round's decisions
-        proj_cumulative = {name: andrews.tqm.cumulative_spend.get(name, 0) + tqm_decisions.get(name, 0)
+        proj_cumulative = {name: apex.tqm.cumulative_spend.get(name, 0) + tqm_decisions.get(name, 0)
                            for name in INITIATIVE_NAMES}
         proj_mat = proj_lab = proj_rd = proj_adm = proj_dem = 0.0
         for name, impacts in TQM_IMPACTS.items():
@@ -1684,11 +1764,11 @@ with tab_tqm:
             proj_rd += impacts["rd_cycle"] * factor
             proj_adm += impacts["admin"] * factor
             proj_dem += impacts["demand"] * factor
-        cur_mat = andrews.tqm.material_cost_reduction
-        cur_lab = andrews.tqm.labor_cost_reduction
-        cur_rd = andrews.tqm.rd_cycle_time_reduction
-        cur_adm = andrews.tqm.admin_cost_reduction
-        cur_dem = andrews.tqm.demand_increase
+        cur_mat = apex.tqm.material_cost_reduction
+        cur_lab = apex.tqm.labor_cost_reduction
+        cur_rd = apex.tqm.rd_cycle_time_reduction
+        cur_adm = apex.tqm.admin_cost_reduction
+        cur_dem = apex.tqm.demand_increase
         yi_df = pd.DataFrame([
             {"Metric": "Material Cost", "Current": f"{cur_mat*100:.1f}%", "After This Round": f"{proj_mat*100:.1f}%", "Δ": f"{(proj_mat-cur_mat)*100:+.1f}%"},
             {"Metric": "Labor Cost", "Current": f"{cur_lab*100:.1f}%", "After This Round": f"{proj_lab*100:.1f}%", "Δ": f"{(proj_lab-cur_lab)*100:+.1f}%"},
@@ -1697,36 +1777,36 @@ with tab_tqm:
             {"Metric": "Demand Increase", "Current": f"+{cur_dem*100:.1f}%", "After This Round": f"+{proj_dem*100:.1f}%", "Δ": f"{(proj_dem-cur_dem)*100:+.1f}%"},
             {"Metric": "Total Round Spend", "Current": "—", "After This Round": fmt_money(total_tqm), "Δ": "—"},
         ])
-        st.dataframe(yi_df, use_container_width=True, hide_index=True)
+        st.dataframe(yi_df, width="stretch", hide_index=True)
 
     with imp_col2:
-        st.markdown('<div class="capsim-section-title">📈 Cumulative Impacts (all rounds to date)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bizsim-section-title">📈 Cumulative Impacts (all rounds to date)</div>', unsafe_allow_html=True)
         ci_df = pd.DataFrame([
             {"Metric": "Material Cost Reduction", "Value": f"{cur_mat*100:.1f}%", "Max": "-11.8%"},
             {"Metric": "Labor Cost Reduction", "Value": f"{cur_lab*100:.1f}%", "Max": "-14.0%"},
             {"Metric": "R&D Cycle Time Reduction", "Value": f"{cur_rd*100:.1f}%", "Max": "-40.0%"},
             {"Metric": "Admin Cost Reduction", "Value": f"{cur_adm*100:.1f}%", "Max": "-60.0%"},
             {"Metric": "Demand Increase", "Value": f"+{cur_dem*100:.1f}%", "Max": "+14.4%"},
-            {"Metric": "Total Cumulative Spend", "Value": fmt_money(andrews.tqm.total_expenditures), "Max": "—"},
+            {"Metric": "Total Cumulative Spend", "Value": fmt_money(apex.tqm.total_expenditures), "Max": "—"},
         ])
-        st.dataframe(ci_df, use_container_width=True, hide_index=True)
+        st.dataframe(ci_df, width="stretch", hide_index=True)
 
 
 
 # ============================================================
-# TAB: INQUIRER (single long scrollable page, mimics real Capstone Courier)
+# TAB: MARKET REPORT (single long scrollable page)
 # ============================================================
 
-with tab_inq:
-    inq = full_inquirer(state)
-    fp_data = inq["front_page"]["data"]
-    company_colors = {"Andrews": "#1a365d", "Baldwin": "#9b2c2c", "Chester": "#2c7a7b", "Digby": "#744210"}
+with tab_report:
+    market_report = full_market_report(state)
+    fp_data = market_report["front_page"]["data"]
+    company_colors = {"Apex": "#1a365d", "Borealis": "#9b2c2c", "Crestline": "#2c7a7b", "Dynamo": "#744210"}
 
     # ---------- HEADER + TABLE OF CONTENTS ----------
     st.markdown(f"""
-    <div class="inq-paper" id="inq-top">
-        <div class="inq-masthead">
-            <h1>COMP-XM&reg; INQUIRER</h1>
+    <div class="report-paper" id="report-top">
+        <div class="report-masthead">
+            <h1>BIZSIM MARKET REPORT</h1>
             <div class="subtitle">Round {state.round_num} • Dec 31, {state.year} • Industry Report</div>
         </div>
         <h3 style="color:#1a365d; font-family:Georgia,serif; margin-bottom:8px;">Contents</h3>
@@ -1750,14 +1830,14 @@ with tab_inq:
 
     # ====== SECTION 1: FRONT PAGE ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-1-front">
+    <div class="report-paper" id="sec-1-front">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Front Page</span>
-            <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year} &nbsp;&nbsp; CompXM-Andrews</span>
+            <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year} &nbsp;&nbsp; BizSim-Apex</span>
         </h2><hr>
     """, unsafe_allow_html=True)
 
-    # Selected Financial Statistics — exact row order from real Capstone
+    # Selected Financial Statistics
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">SELECTED FINANCIAL STATISTICS</div>', unsafe_allow_html=True)
     metric_rows = [
         ("ROS", lambda c: f"{c.ros*100:.1f}%"),
@@ -1805,7 +1885,7 @@ with tab_inq:
         else:
             avg_col.append(fmt_money(a))
     sfs_data["Average"] = avg_col
-    st.dataframe(pd.DataFrame(sfs_data), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(sfs_data), width="stretch", hide_index=True)
 
     # Percent of Sales + Market Share charts
     col_ps, col_ms = st.columns(2)
@@ -1833,10 +1913,10 @@ with tab_inq:
         fig.update_layout(height=300, margin=dict(t=20, b=20), yaxis_title="% of Sales",
                           plot_bgcolor="white", paper_bgcolor="white",
                           legend=dict(orientation="h", y=-0.2))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     with col_ms:
         st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">MARKET SHARE</div>', unsafe_allow_html=True)
-        ms_data = inq["market_share"]
+        ms_data = market_report["market_share"]
         totals = [(c.name, ms_data[c.name]["Total"]) for c in state.companies]
         fig = go.Figure(data=[go.Pie(
             labels=[t[0] for t in totals], values=[t[1] for t in totals],
@@ -1845,13 +1925,13 @@ with tab_inq:
         )])
         fig.update_layout(height=300, margin=dict(t=20, b=20),
                           paper_bgcolor="white", showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 1</div></div>', unsafe_allow_html=True)
 
     # ====== SECTION 2: STOCK & BONDS ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-2-stocks">
+    <div class="report-paper" id="sec-2-stocks">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Stock &amp; Bonds</span>
             <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
@@ -1870,16 +1950,16 @@ with tab_inq:
         "Yield": f"{c.dividend_per_share/max(0.01,c.stock_price)*100:.1f}%" if c.stock_price > 0 else "0%",
         "P/E": f"{c.stock_price/max(0.01,c.eps):.1f}" if c.eps > 0 else "—",
     } for c in state.companies])
-    st.dataframe(stock_df, use_container_width=True, hide_index=True)
+    st.dataframe(stock_df, width="stretch", hide_index=True)
 
     # Stock price chart (history if available)
     if state.history:
         hist_df = pd.DataFrame(state.history)
-        fig = px.line(hist_df, x="round", y="andrews_stock", markers=True,
-                       title="Andrews Stock Price Trend",
-                       color_discrete_sequence=[company_colors["Andrews"]])
+        fig = px.line(hist_df, x="round", y="apex_stock", markers=True,
+                       title="Apex Stock Price Trend",
+                       color_discrete_sequence=[company_colors["Apex"]])
         fig.update_layout(height=260, margin=dict(t=40, b=20), plot_bgcolor="white", paper_bgcolor="white")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">BOND MARKET SUMMARY</div>', unsafe_allow_html=True)
     bond_rows = []
@@ -1892,21 +1972,21 @@ with tab_inq:
                 "Close$": f"${b.market_close:.2f}",
                 "S&P": c.sp_rating,
             })
-    st.dataframe(pd.DataFrame(bond_rows), use_container_width=True, hide_index=True, height=300)
+    st.dataframe(pd.DataFrame(bond_rows), width="stretch", hide_index=True, height=300)
     st.markdown(f"<p style='font-style:italic; margin:8px 0;'>Next Year's Prime Rate: <b>{state.prime_interest_rate*100:.1f}%</b></p>", unsafe_allow_html=True)
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 2</div></div>', unsafe_allow_html=True)
 
     # ====== SECTION 3: FINANCIAL SUMMARY ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-3-fin">
+    <div class="report-paper" id="sec-3-fin">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Financial Summary</span>
             <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
         </h2><hr>
     """, unsafe_allow_html=True)
 
-    fs_table = inq["financial_summary"]
+    fs_table = market_report["financial_summary"]
     # Cash Flow Statement (subset of approximations)
     cf_rows = [
         ("Net Income", "Net_Profit"),
@@ -1920,7 +2000,7 @@ with tab_inq:
     cf_df = pd.DataFrame({"Category": [r[0] for r in cf_rows], **{
         c.name: [fmt_money(fs_table[c.name][r[1]]) for r in cf_rows] for c in state.companies
     }})
-    st.dataframe(cf_df, use_container_width=True, hide_index=True)
+    st.dataframe(cf_df, width="stretch", hide_index=True)
 
     bs_rows = [
         ("Cash", "Cash"), ("Accounts Receivable", "AR"), ("Inventory", "Inventory"),
@@ -1933,13 +2013,13 @@ with tab_inq:
     bs_df = pd.DataFrame({"Category": [r[0] for r in bs_rows], **{
         c.name: [fmt_money(fs_table[c.name][r[1]]) for r in bs_rows] for c in state.companies
     }})
-    st.dataframe(bs_df, use_container_width=True, hide_index=True)
+    st.dataframe(bs_df, width="stretch", hide_index=True)
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 3</div></div>', unsafe_allow_html=True)
 
     # ====== SECTION 4: PRODUCTION ANALYSIS ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-4-prod">
+    <div class="report-paper" id="sec-4-prod">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Production Analysis</span>
             <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
@@ -1957,11 +2037,11 @@ with tab_inq:
                   barmode="group", title="Production vs Capacity",
                   color_discrete_sequence=["#cbd5e0", "#1a365d"])
     fig.update_layout(height=260, margin=dict(t=40, b=20), plot_bgcolor="white", paper_bgcolor="white")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
-    # Plant Information table (matches Capsim 17-col format)
+    # Plant Information table (matches BizSim 17-col format)
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">PLANT INFORMATION</div>', unsafe_allow_html=True)
-    prod_df = pd.DataFrame(inq["production_analysis"])
+    prod_df = pd.DataFrame(market_report["production_analysis"])
     prod_df["2nd Shift OT"] = "—"
     prod_df["Contrib Mgn %"] = "—"
     prod_df["Util%"] = prod_df["Utilization_Pct"].round(0).astype(int).astype(str) + "%"
@@ -1969,7 +2049,7 @@ with tab_inq:
                    "Revision_Date", "Age", "MTBF", "Pfmn", "Size",
                    "Price", "Material_Cost", "Labor_Cost", "Contrib Mgn %",
                    "2nd Shift OT", "Automation", "Capacity_Next", "Util%"]
-    st.dataframe(prod_df[plant_cols], use_container_width=True, hide_index=True)
+    st.dataframe(prod_df[plant_cols], width="stretch", hide_index=True)
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 4</div></div>', unsafe_allow_html=True)
 
@@ -1977,11 +2057,11 @@ with tab_inq:
     segment_page_map = {"Thrift": ("5-thrift", 5), "Core": ("6-core", 6),
                          "Nano": ("7-nano", 7), "Elite": ("8-elite", 8)}
     for seg_name, (anchor, page_num) in segment_page_map.items():
-        seg_data = inq["segments"][seg_name]
+        seg_data = market_report["segments"][seg_name]
         seg_obj = state.get_segment(seg_name)
 
         st.markdown(f"""
-        <div class="inq-paper" id="sec-{anchor}">
+        <div class="report-paper" id="sec-{anchor}">
             <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
                 <span>{seg_name} Segment Analysis</span>
                 <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
@@ -1998,7 +2078,7 @@ with tab_inq:
                 {"Metric": "Segment % of Total Industry", "Value": f"{seg_data['industry_demand'] / sum(state.industry_unit_demand.values()) * 100:.1f}%"},
                 {"Metric": f"{state.year + 1} Demand Growth Rate", "Value": seg_data['next_growth']},
             ])
-            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+            st.dataframe(stats_df, width="stretch", hide_index=True)
 
             st.markdown(f'<h3 style="color:#1a365d;">{seg_name} Customer Buying Criteria</h3>', unsafe_allow_html=True)
             # Build BC table with CENTER + OFFSET shown clearly (per user feedback)
@@ -2009,7 +2089,7 @@ with tab_inq:
                 {"Criterion": "MTBF (Reliability)", "Expectations": f"{bc['MTBF']['range'][0]:,}-{bc['MTBF']['range'][1]:,}", "Importance": bc['MTBF']['weight']},
                 {"Criterion": "Position (Ideal Spot)", "Expectations": f"Pfmn {seg_obj.ideal_pfmn:.1f} Size {seg_obj.ideal_size:.1f}", "Importance": bc['Position']['weight']},
             ])
-            st.dataframe(criteria_df, use_container_width=True, hide_index=True)
+            st.dataframe(criteria_df, width="stretch", hide_index=True)
             st.caption(f"📍 **Segment Center** ({seg_obj.center_pfmn:.1f}, {seg_obj.center_size:.1f}) + **Ideal Offset** ({seg_obj.ideal_offset_pfmn:+.1f}, {seg_obj.ideal_offset_size:+.1f}) = Ideal Position above. Center drifts by ({seg_obj.drift_pfmn:+.1f}, {seg_obj.drift_size:+.1f}) per year.")
 
         with col_r:
@@ -2028,7 +2108,7 @@ with tab_inq:
                          range_x=[0, 100])
             fig.update_layout(height=200, margin=dict(t=10, b=10, l=10, r=10),
                               plot_bgcolor="white", paper_bgcolor="white", showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             # Per-segment perceptual map (focus on this segment)
             st.markdown(f'<h3 style="color:#1a365d;">Perceptual Map — {seg_name}</h3>', unsafe_allow_html=True)
@@ -2063,9 +2143,9 @@ with tab_inq:
                 height=250, plot_bgcolor="white", paper_bgcolor="white",
                 margin=dict(t=10, b=30, l=40, r=10),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
-        # Top Products table (15 columns matching real Capstone)
+        # Top Products table (15 columns)
         st.markdown(f'<h3 style="color:#1a365d; margin-top:12px;">Top Products in {seg_name}</h3>', unsafe_allow_html=True)
         tp_df = pd.DataFrame(seg_data["top_products"])
         if not tp_df.empty:
@@ -2087,13 +2167,13 @@ with tab_inq:
                 "Access%": (tp_df["Accessibility"] * 100).round(0).astype(int).astype(str) + "%",
                 "Cust Survey": tp_df["Cust_Score"].round(1),
             })
-            st.dataframe(tp_display, use_container_width=True, hide_index=True)
+            st.dataframe(tp_display, width="stretch", hide_index=True)
 
         st.markdown(f'<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page {page_num}</div></div>', unsafe_allow_html=True)
 
     # ====== SECTION 9: MARKET SHARE ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-9-market">
+    <div class="report-paper" id="sec-9-market">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Market Share Report</span>
             <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
@@ -2115,10 +2195,10 @@ with tab_inq:
                      color_discrete_sequence=["#cbd5e0", "#1a365d"])
         fig.update_layout(height=280, margin=dict(t=20, b=20), plot_bgcolor="white", paper_bgcolor="white",
                           legend=dict(orientation="h"))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     with col_c2:
         st.markdown('<div style="font-weight:700; color:#1a365d; padding:4px 0;">MARKET SHARE BY SEGMENT</div>', unsafe_allow_html=True)
-        ms_data = inq["market_share"]
+        ms_data = market_report["market_share"]
         ms_seg_data = []
         for cname in [c.name for c in state.companies]:
             for seg in ["Thrift", "Core", "Nano", "Elite"]:
@@ -2128,7 +2208,7 @@ with tab_inq:
                      color_discrete_map=company_colors)
         fig.update_layout(height=280, margin=dict(t=20, b=20), plot_bgcolor="white", paper_bgcolor="white",
                           legend=dict(orientation="h"))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">ACTUAL MARKET SHARE IN UNITS</div>', unsafe_allow_html=True)
     ms_table_data = {"Segment": ["Thrift", "Core", "Nano", "Elite", "Total"]}
@@ -2136,13 +2216,13 @@ with tab_inq:
         col = [ms_data[cname][s] for s in ["Thrift", "Core", "Nano", "Elite"]]
         col.append(sum(col))
         ms_table_data[cname] = [f"{x:,}" for x in col]
-    st.dataframe(pd.DataFrame(ms_table_data), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(ms_table_data), width="stretch", hide_index=True)
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 9</div></div>', unsafe_allow_html=True)
 
     # ====== SECTION 10: PERCEPTUAL MAP (industry-wide) ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-10-pmap">
+    <div class="report-paper" id="sec-10-pmap">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Perceptual Map</span>
             <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
@@ -2188,7 +2268,7 @@ with tab_inq:
         margin=dict(t=20, b=40, l=60, r=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # 4 per-company tables (one row of 4)
     cols = st.columns(4)
@@ -2197,13 +2277,13 @@ with tab_inq:
             st.markdown(f"<div style='font-weight:700; color:{company_colors[c.name]}; text-align:center; padding:4px;'>{c.name}</div>", unsafe_allow_html=True)
             ct_df = pd.DataFrame([{"Name": p.name, "Pfmn": p.pfmn, "Size": p.size,
                                      "Revised": p.revision_date} for p in c.products])
-            st.dataframe(ct_df, use_container_width=True, hide_index=True)
+            st.dataframe(ct_df, width="stretch", hide_index=True)
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 10</div></div>', unsafe_allow_html=True)
 
     # ====== SECTION 11: HR & TQM CUSTOM MODULES ======
     st.markdown(f"""
-    <div class="inq-paper" id="sec-11-custom">
+    <div class="report-paper" id="sec-11-custom">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>HR &amp; TQM Custom Modules</span>
             <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year}</span>
@@ -2228,7 +2308,7 @@ with tab_inq:
     wf_df = pd.DataFrame({"Category": [m[0] for m in wf_metrics], **{
         c.name: [fn(c) for _, fn in wf_metrics] for c in state.companies
     }})
-    st.dataframe(wf_df, use_container_width=True, hide_index=True)
+    st.dataframe(wf_df, width="stretch", hide_index=True)
 
     # TQM Decisions + Impacts
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">TOTAL QUALITY MANAGEMENT</div>', unsafe_allow_html=True)
@@ -2241,7 +2321,7 @@ with tab_inq:
     tqm_rows.append({"Initiative ($ this round)": "**TOTAL ROUND SPEND**", **{
         c.name: fmt_money(sum(c.tqm.spend_this_round.values())) for c in state.companies
     }})
-    st.dataframe(pd.DataFrame(tqm_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(tqm_rows), width="stretch", hide_index=True)
 
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">TQM YEARLY IMPACTS (CUMULATIVE)</div>', unsafe_allow_html=True)
     tqm_impact_rows = [
@@ -2255,7 +2335,7 @@ with tab_inq:
     tqm_imp_df = pd.DataFrame({"Impact": [m[0] for m in tqm_impact_rows], **{
         c.name: [fn(c) for _, fn in tqm_impact_rows] for c in state.companies
     }})
-    st.dataframe(tqm_imp_df, use_container_width=True, hide_index=True)
+    st.dataframe(tqm_imp_df, width="stretch", hide_index=True)
 
     st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Page 11</div></div>', unsafe_allow_html=True)
 
@@ -2266,14 +2346,14 @@ with tab_inq:
 
 with tab_icr:
     st.markdown(f"""
-    <div class="inq-paper">
-        <div class="inq-masthead">
+    <div class="report-paper">
+        <div class="report-masthead">
             <h1 style="font-size:32px;">INDUSTRY CONDITIONS REPORT</h1>
-            <div class="subtitle">Comp-XM 2026 • Released at start of game • drift rates &amp; offsets are FIXED</div>
+            <div class="subtitle">BizSim 2026 • Released at start of game • drift rates &amp; offsets are FIXED</div>
         </div>
     """, unsafe_allow_html=True)
 
-    st.info("📋 **This is the canonical source for drift information** — in real Capsim, this report is given to you ONCE at the start of the exam (separate from the Inquirer which updates each round). Drift rates and ideal offsets NEVER change between rounds.")
+    st.info("📋 **This is the canonical source for drift information.** It is issued once at the start of each game, separately from the Market Report that updates every round. Drift rates and ideal offsets never change between rounds.")
 
     # Table 1: Segment Circle Drift Rates
     st.markdown('<h2 style="color:#1a365d;">Table 1: Segment Circle Drift Rates</h2>', unsafe_allow_html=True)
@@ -2283,7 +2363,7 @@ with tab_icr:
         "Performance Drift": f"{s.drift_pfmn:+.1f}",
         "Size Drift": f"{s.drift_size:+.1f}",
     } for s in state.segments])
-    st.dataframe(drift_table, use_container_width=True, hide_index=True)
+    st.dataframe(drift_table, width="stretch", hide_index=True)
 
     # Table 2: Segment Centers at end of each round
     st.markdown('<h2 style="color:#1a365d; margin-top:24px;">Table 2: Segment Centers at the End of Each Round</h2>', unsafe_allow_html=True)
@@ -2297,7 +2377,7 @@ with tab_icr:
             label = f"R{r}" + (" ← current" if r == state.round_num else "")
             row[label] = f"({cp:.1f}, {cs:.1f})"
         center_rows.append(row)
-    st.dataframe(pd.DataFrame(center_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(center_rows), width="stretch", hide_index=True)
 
     # Table 3: Ideal Spot Offsets (CONSTANT)
     st.markdown('<h2 style="color:#1a365d; margin-top:24px;">Table 3: Ideal Spot Offsets (Constant Across All Rounds)</h2>', unsafe_allow_html=True)
@@ -2315,7 +2395,7 @@ with tab_icr:
                 "Elite": "Strong bias toward faster (perf matters most)",
             }.get(s.name, "—"),
         })
-    st.dataframe(pd.DataFrame(offset_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(offset_rows), width="stretch", hide_index=True)
 
     # Formula explanation
     st.markdown("""
@@ -2336,11 +2416,11 @@ with tab_icr:
 
     # Table 4: Beginning Segment Growth Rates
     st.markdown('<h2 style="color:#1a365d; margin-top:24px;">Table 4: Industry Conditions Beginning Segment Growth Rates</h2>', unsafe_allow_html=True)
-    st.caption("Growth rates may change year to year — check Inquirer Segment Analysis each round for updates.")
+    st.caption("Growth rates may change year to year — check the Market Report's segment analysis each round for updates.")
     growth_df = pd.DataFrame([{
         "Segment": s.name, "Growth Rate (R1)": f"{s.growth_rate*100:.1f}%",
     } for s in state.segments])
-    st.dataframe(growth_df, use_container_width=True, hide_index=True)
+    st.dataframe(growth_df, width="stretch", hide_index=True)
 
     # Section 3: Buying Criteria
     st.markdown('<h2 style="color:#1a365d; margin-top:24px;">Section 3: Buying Criteria by Segment (R0)</h2>', unsafe_allow_html=True)
@@ -2357,14 +2437,14 @@ with tab_icr:
             "MTBF Wt": f"{s.mtbf_weight*100:.0f}%",
             "Position Wt": f"{s.position_weight*100:.0f}%",
         })
-    st.dataframe(pd.DataFrame(bc_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(bc_rows), width="stretch", hide_index=True)
 
     # Prime rate
     st.markdown(f'<h2 style="color:#1a365d; margin-top:24px;">Section 4: Projected Interest Rate</h2>', unsafe_allow_html=True)
     st.markdown(f"**Prime Interest Rate Round 1:** {state.prime_interest_rate*100:.1f}%")
     st.caption("Affects short-term debt, long-term bond rates, and emergency loan penalty.")
 
-    st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Industry Conditions Report — Comp-XM 2026</div></div>', unsafe_allow_html=True)
+    st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Industry Conditions Report — BizSim 2026</div></div>', unsafe_allow_html=True)
 
 
 # ============================================================
@@ -2372,48 +2452,59 @@ with tab_icr:
 # ============================================================
 
 with tab_bsc:
-    st.markdown('<div class="capsim-section-title">Balanced Scorecard</div>', unsafe_allow_html=True)
-    bsc = compute_round_bsc(state, "Andrews",
+    st.markdown('<div class="bizsim-section-title">Balanced Scorecard</div>', unsafe_allow_html=True)
+    bsc = compute_round_bsc(state, "Apex",
                               prev_state=st.session_state.prev_state_snapshot)
 
     cols = st.columns(4)
-    with cols[0]: kpi_card("Financial", f"{bsc.financial:.1f}", "of 30 pts")
-    with cols[1]: kpi_card("Internal Bus.", f"{bsc.internal_business:.1f}", "of 20 pts")
-    with cols[2]: kpi_card("Customer", f"{bsc.customer:.1f}", "of 35 pts")
-    with cols[3]: kpi_card("Learning & Growth", f"{bsc.learning_growth:.1f}", "of 23 pts")
+    with cols[0]: kpi_card("Financial", f"{bsc.financial:.1f}", "of ~28")
+    with cols[1]: kpi_card("Internal Bus.", f"{bsc.internal_business:.1f}", "of ~18")
+    with cols[2]: kpi_card("Customer", f"{bsc.customer:.1f}", "of ~32")
+    with cols[3]: kpi_card("Learning & Growth", f"{bsc.learning_growth:.1f}", "of ~21")
     st.markdown(f"""
     <div style='background:#1a365d; color:white; padding:16px; text-align:center; margin:12px 0;'>
         <div style='font-size:13px; letter-spacing:2px; text-transform:uppercase; color:#cbd5e0;'>Total Round Score</div>
-        <div style='font-size:42px; font-weight:700; color:#d69e2e;'>{bsc.total:.1f}</div>
-        <div style='font-size:12px; color:#cbd5e0;'>per-perspective sum (approx 108 max per round in this sim)</div>
+        <div style='font-size:42px; font-weight:700; color:#d69e2e;'>{bsc.total:.1f} / 100</div>
+        <div style='font-size:12px; color:#cbd5e0;'>BSC = four 100-pt rounds + 100-pt recap = 500 (+ 500 Board Queries = 1000)</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="inq-section-head">Metric Breakdown</div>', unsafe_allow_html=True)
+    st.markdown('<div class="report-section-head">Metric Breakdown</div>', unsafe_allow_html=True)
     metric_df = pd.DataFrame([
         {"Metric": k, "Score": f"{v:.1f}"} for k, v in bsc.metrics.items()
     ])
-    st.dataframe(metric_df, use_container_width=True, hide_index=True)
+    st.dataframe(metric_df, width="stretch", hide_index=True)
 
     if state.round_num >= 4 and st.session_state.bsc_history:
         st.divider()
-        st.markdown('<div class="inq-section-head">Final Cumulative Score (Round 5)</div>', unsafe_allow_html=True)
-        cum = compute_cumulative_bsc(st.session_state.bsc_history, state, "Andrews")
+        st.markdown('<div class="report-section-head">Final Cumulative Score (Round 5)</div>', unsafe_allow_html=True)
+        cum = compute_cumulative_bsc(st.session_state.bsc_history, state, "Apex")
         c = st.columns(4)
-        with c[0]: kpi_card("Cum Financial", f"{cum.financial:.0f}", "of 200")
-        with c[1]: kpi_card("Cum Internal", f"{cum.internal_business:.0f}", "of 100")
-        with c[2]: kpi_card("Cum Customer", f"{cum.customer:.0f}", "of 100")
-        with c[3]: kpi_card("Cum Learning", f"{cum.learning_growth:.0f}", "of 100")
-        round_total = sum(b["total"] for b in st.session_state.bsc_history)
-        grand = round_total + cum.total
+        with c[0]: kpi_card("Recap Financial", f"{cum.financial:.0f}", "of 40")
+        with c[1]: kpi_card("Recap Internal", f"{cum.internal_business:.0f}", "of 20")
+        with c[2]: kpi_card("Recap Customer", f"{cum.customer:.0f}", "of 20")
+        with c[3]: kpi_card("Recap Learning", f"{cum.learning_growth:.0f}", "of 20")
+
+        # BizSim total = 500 Balanced Scorecard + 500 Board Queries = 1000.
+        #   BSC 500 = four 100-pt round scorecards + one 100-pt Recap.
+        #   BQ  500 = five 100-pt board-query sets (correct/total × 100 each).
+        round_total = sum(b["total"] for b in st.session_state.bsc_history)   # ≤ 400
+        bsc_total = round_total + cum.total                                    # ≤ 500
+        bq_total = sum(r["correct"] / max(1, r["total"]) * 100
+                       for r in st.session_state.board_results.values())       # ≤ 500
+        grand = bsc_total + bq_total                                           # ≤ 1000
+        bq_graded = len(st.session_state.board_results)
         st.markdown(f"""
         <div style='background:#d69e2e; color:#1a365d; padding:24px; text-align:center; margin:12px 0;'>
-            <div style='font-size:13px; letter-spacing:2px; text-transform:uppercase;'>GRAND TOTAL — Comp-XM Score</div>
+            <div style='font-size:13px; letter-spacing:2px; text-transform:uppercase;'>GRAND TOTAL — Comp Score</div>
             <div style='font-size:64px; font-weight:700;'>{grand:.0f} / 1000</div>
-            <div style='font-size:13px;'>{round_total:.0f} round-by-round + {cum.total:.0f} cumulative</div>
+            <div style='font-size:13px;'>Balanced Scorecard {bsc_total:.0f}/500 &nbsp;+&nbsp; Board Queries {bq_total:.0f}/500</div>
+            <div style='font-size:12px;'>({round_total:.0f} round + {cum.total:.0f} recap BSC · {bq_graded}/5 board-query sets graded)</div>
             <div style='font-size:12px; margin-top:8px;'>Passing ≈ 662 (50th percentile). {'✅ PASS!' if grand >= 662 else '❌ Below passing threshold'}</div>
         </div>
         """, unsafe_allow_html=True)
+        if bq_graded < 5:
+            st.caption("💡 Grade all 5 Board Query sets (tab ❓) to fill the 500 Board-Query half of your score.")
 
 
 # ============================================================
@@ -2421,14 +2512,30 @@ with tab_bsc:
 # ============================================================
 
 with tab_bq:
-    st.markdown('<div class="capsim-section-title">Board Queries</div>', unsafe_allow_html=True)
-    round_to_query = st.selectbox("Round", [1, 2, 3, 4, 5],
-                                    index=min(state.round_num, 4),
+    st.markdown('<div class="bizsim-section-title">Board Queries</div>', unsafe_allow_html=True)
+    available_query_rounds = list(range(1, min(state.round_num, 4) + 1))
+    if state.round_num >= 4:
+        available_query_rounds.append(5)
+    round_to_query = st.selectbox("Round", available_query_rounds or [1],
+                                    index=len(available_query_rounds) - 1 if available_query_rounds else 0,
+                                    disabled=not available_query_rounds,
                                     format_func=lambda x: f"Round {x}" if x < 5 else "Round 5 — Final Cumulative")
 
-    questions = get_round_queries(round_to_query)
+    # Personalized board queries: generate from the CURRENT standings the first time a
+    # round is opened, then freeze them (cache) so the numbers stay stable for that round.
+    # Every correct answer is computed from the live engine — it reflects YOUR results,
+    # not a static bank (this is the defining BizSim board-query mechanic).
+    if not available_query_rounds:
+        st.info("Finish Round 1 to unlock its Board Queries.")
+    elif round_to_query not in st.session_state.gen_queries:
+        st.session_state.gen_queries[round_to_query] = generate_round_queries(
+            state, round_to_query, "Apex")
+    questions = st.session_state.gen_queries.get(round_to_query, [])
+    st.caption("Questions are generated from your company's current results — answer them "
+               "right after finishing each round for numbers that match that round.")
+
     if not questions:
-        st.warning(f"No queries defined for round {round_to_query}.")
+        st.warning(f"No queries available for round {round_to_query}.")
     else:
         st.markdown(f"**{len(questions)} questions** for Round {round_to_query}")
         answers = {}
@@ -2444,8 +2551,12 @@ with tab_bq:
                 answers[q.id] = q.options.index(selected)
 
         if st.button("📝 Grade Round", type="primary"):
-            result = grade_round(round_to_query, answers)
+            result = grade_generated(questions, answers)
             st.session_state.board_results[round_to_query] = result
+            try:
+                save_state()
+            except RuntimeError as exc:
+                st.error(str(exc))
             pct = result['correct']/max(1,result['total'])*100
             color = "#2f855a" if pct >= 70 else ("#d69e2e" if pct >= 50 else "#c53030")
             st.markdown(f"""
@@ -2472,39 +2583,39 @@ with tab_bq:
 # ============================================================
 
 with tab_hist:
-    st.markdown('<div class="capsim-section-title">Round-by-Round History & Trends</div>', unsafe_allow_html=True)
+    st.markdown('<div class="bizsim-section-title">Round-by-Round History & Trends</div>', unsafe_allow_html=True)
     if not state.history:
-        st.info("No round history yet. Submit decisions in R&D/Marketing/etc tabs, then click ADVANCE in TQM tab.")
+        st.info("No round history yet. Submit decisions in any decision tab, then use the global ADVANCE button below the tabs.")
     else:
         df = pd.DataFrame(state.history)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
         col1, col2 = st.columns(2)
         with col1:
-            fig = px.line(df, x="round", y="andrews_stock", title="Andrews Stock Price",
+            fig = px.line(df, x="round", y="apex_stock", title="Apex Stock Price",
                           markers=True, line_shape="spline")
             fig.add_hline(y=95.38, line_dash="dash", line_color="#d69e2e",
                           annotation_text="R0 $95.38", annotation_position="bottom right")
             fig.update_traces(line=dict(color="#1a365d", width=3), marker=dict(size=10))
             fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=300)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
-            fig2 = px.line(df, x="round", y="andrews_profit", title="Andrews Net Profit",
+            fig2 = px.line(df, x="round", y="apex_profit", title="Apex Net Profit",
                             markers=True, line_shape="spline")
             fig2.update_traces(line=dict(color="#2f855a", width=3), marker=dict(size=10))
             fig2.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=300)
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width="stretch")
         with col2:
-            fig3 = px.line(df, x="round", y="andrews_cash", title="Andrews Cash Position",
+            fig3 = px.line(df, x="round", y="apex_cash", title="Apex Cash Position",
                             markers=True, line_shape="spline")
             fig3.update_traces(line=dict(color="#c05621", width=3), marker=dict(size=10))
             fig3.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=300)
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width="stretch")
 
-            fig4 = px.line(df, x="round", y="andrews_bsc", title="BSC Score per Round",
+            fig4 = px.line(df, x="round", y="apex_bsc", title="BSC Score per Round",
                             markers=True, line_shape="spline")
             fig4.update_traces(line=dict(color="#d69e2e", width=3), marker=dict(size=10))
             fig4.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=300)
-            st.plotly_chart(fig4, use_container_width=True)
+            st.plotly_chart(fig4, width="stretch")
 
 
 # ============================================================
@@ -2515,11 +2626,15 @@ st.markdown("---")
 _pending_global = ensure_pending()
 _adv_c1, _adv_c2, _adv_c3 = st.columns([1, 2, 1])
 with _adv_c2:
+    _adv_ok, _adv_reason = can_advance(state.round_num)
     if state.round_num >= 4:
         st.success("🏁 GAME COMPLETE — R4 finished. Check Scorecard tab for final BSC. Reset to play again.")
+    elif not _adv_ok:
+        st.info("🎮 Free demo covers Round 1. Upgrade to play Rounds 2–4.")
+        render_paywall("advance")
     else:
         if st.button(f"🚀 SUBMIT ALL DECISIONS & ADVANCE TO R{state.round_num + 1}",
-                     type="primary", use_container_width=True, key="global_advance_btn"):
+                     type="primary", width="stretch", key="global_advance_btn"):
             with st.spinner(f"Simulating Round {state.round_num + 1}..."):
                 prev_state = state.model_copy(deep=True)
                 st.session_state.prev_state_snapshot = prev_state
@@ -2527,6 +2642,12 @@ with _adv_c2:
                 snapshot_current_round()
                 result = advance_round(state, _pending_global, prev_state=prev_state)
                 st.session_state.bsc_history.append(result["bsc"])
+                completed_round = result["round_num"]
+                st.session_state.gen_queries[completed_round] = generate_round_queries(
+                    state.model_copy(deep=True), completed_round, "Apex")
+                if completed_round == 4:
+                    st.session_state.gen_queries[5] = generate_round_queries(
+                        state.model_copy(deep=True), 5, "Apex")
                 st.session_state.pending_decisions = None
                 save_state()
             st.success(f"Round {result['round_num']} complete! BSC: {result['bsc']['total']:.1f}")
@@ -2540,16 +2661,17 @@ with _adv_c2:
 st.markdown("---")
 fcol1, fcol2, fcol3, fcol4 = st.columns([2, 1, 1, 1])
 with fcol1:
-    st.markdown(f"""<div class="compxm-footer">
-        COMP-XM® 2026 SIMULATOR • ANDREWS CORPORATION • EXAM PREP • R{state.round_num}/4
+    st.markdown(f"""<div class="bizsim-footer">
+        BIZSIM • BUSINESS STRATEGY SIMULATOR • APEX CORPORATION • R{state.round_num}/4
     </div>""", unsafe_allow_html=True)
 with fcol2:
     if st.button("💾 SAVE STATE"):
         save_state()
         st.toast("Saved!")
 with fcol3:
-    if st.button("🔄 RESET"):
+    if st.button("🔄 RESET", disabled=not can_reset(),
+                 help=None if can_reset() else "Upgrade to reset & replay"):
         reset_state()
         st.rerun()
 with fcol4:
-    st.markdown(f"<div style='text-align:right; padding-top:8px; font-size:11px; color:#718096;'>Cash: <b>{fmt_money(andrews.cash)}</b> • Stock: <b>${andrews.stock_price:.2f}</b></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; padding-top:8px; font-size:11px; color:#718096;'>Cash: <b>{fmt_money(apex.cash)}</b> • Stock: <b>${apex.stock_price:.2f}</b></div>", unsafe_allow_html=True)

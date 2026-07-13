@@ -1,19 +1,19 @@
 """
 Finance engine — Income Statement, Balance Sheet, Cash Flow, Bonds.
 
-Per Capsim:
+Per BizSim:
   - Income tax = 35% flat
-  - Profit sharing = 1% of net profit (after tax)
+  - Profit sharing = 2% of net profit (after tax)
   - Bond: 10-year term, 5% brokerage fee on issuance
   - New bond rate = current LT interest rate + 1.4% spread
   - Max bond debt = 80% × gross plant value
   - Current debt rate ≈ prime + 0.5% (short-term)
   - Emergency loan rate = current debt rate + 7.5% penalty
-  - Stock issuance: $500K fee + commissions
-  - Stock buyback: at current market price
+  - Stock issuance: 5% fee, max 20% new shares per round
+  - Stock buyback: 1.5% fee, max 5% of shares per round
   - Bond early retirement: 1.5% fee + premium over face
 
-Reference: Capstone User Guide §4.5 Finance
+Reference: business-simulation finance rules
 """
 from __future__ import annotations
 from typing import List, Optional, Dict
@@ -22,8 +22,8 @@ from sim.engines.production import plant_value, annual_depreciation, inventory_c
 
 
 # Constants
-TAX_RATE = 0.35                 # 35% of pre-tax income (verified: all 4 cos in 2026 Inquirer = 35.0%)
-PROFIT_SHARING_RATE = 0.02      # 2.0% of AFTER-TAX profit (back-calc from real 2026 Inquirer: 410/20511,
+TAX_RATE = 0.35                 # 35% of pre-tax income (verified: all 4 cos in 2026 Market Report = 35.0%)
+PROFIT_SHARING_RATE = 0.02      # 2.0% of AFTER-TAX profit (back-calc from real 2026 Market Report: 410/20511,
                                 #   226/11280, 152/7611, 208/10413 all = 2.0%). NOT 1%, NOT 15%.
 BOND_BROKERAGE_FEE = 0.05       # 5% on issuance
 BOND_NEW_SPREAD = 0.014         # +1.4% over current rate
@@ -31,11 +31,27 @@ BOND_TERM_YEARS = 10
 MAX_BOND_DEBT_RATIO = 0.80      # max bond debt as fraction of plant value
 EMERGENCY_LOAN_PENALTY = 0.075  # +7.5% over current debt rate
 EARLY_RETIRE_FEE = 0.015        # 1.5% of face value
-STOCK_ISSUE_FEE = 500_000
+STOCK_ISSUE_FEE_PCT = 0.05      # 5% brokerage fee on issuance
+STOCK_MAX_ISSUE_PCT = 0.20      # max new shares = 20% of shares outstanding per round
+STOCK_BUYBACK_FEE_PCT = 0.015   # 1.5% brokerage fee on retirement
+STOCK_MAX_BUYBACK_PCT = 0.05    # max buyback = 5% of shares outstanding per round
 
 
-def short_term_rate(prime_rate: float) -> float:
-    return prime_rate + 0.005
+# Bond-rating notch ladder (AAA = prime, each step down = +0.5% on the
+# current-debt rate). 10 tiers, worst = DDD.
+RATING_NOTCH = {
+    "AAA": 0, "AA": 1, "A": 2, "BBB": 3, "BB": 4,
+    "B": 5, "CCC": 6, "CC": 7, "C": 8, "DDD": 9,
+}
+
+
+def short_term_rate(prime_rate: float, sp_rating: Optional[str] = None) -> float:
+    """Current-debt (short-term) interest rate. Tied to creditworthiness: AAA borrows
+    at prime, and the rate rises 0.5% per rating notch below AAA. Without a
+    rating, falls back to prime + 0.5% (legacy neutral)."""
+    if sp_rating is None:
+        return prime_rate + 0.005
+    return prime_rate + 0.005 * RATING_NOTCH.get(sp_rating, 4)
 
 
 def long_term_rate(prime_rate: float, sp_rating: str = "BB") -> float:
@@ -43,13 +59,13 @@ def long_term_rate(prime_rate: float, sp_rating: str = "BB") -> float:
     spread_by_rating = {
         "AAA": 0.010, "AA": 0.015, "A": 0.020, "BBB": 0.030,
         "BB": 0.040, "B": 0.055, "CCC": 0.075, "CC": 0.090,
-        "C": 0.110, "DDD": 0.130, "DD": 0.150, "D": 0.180,
+        "C": 0.110, "DDD": 0.130,
     }
     return prime_rate + spread_by_rating.get(sp_rating, 0.060)
 
 
-def emergency_loan_rate(prime_rate: float) -> float:
-    return short_term_rate(prime_rate) + EMERGENCY_LOAN_PENALTY
+def emergency_loan_rate(prime_rate: float, sp_rating: Optional[str] = None) -> float:
+    return short_term_rate(prime_rate, sp_rating) + EMERGENCY_LOAN_PENALTY
 
 
 def bond_market_price(bond: Bond, current_lt_rate: float) -> float:
@@ -66,25 +82,27 @@ def bond_market_price(bond: Bond, current_lt_rate: float) -> float:
 def calculate_credit_rating(leverage: float) -> str:
     """
     Credit rating from leverage (Assets/Equity), calibrated so the real R0 companies
-    get their actual Inquirer S&P: Andrews 1.74=BB, Baldwin 1.90=BB, Chester 2.66=B,
-    Digby 2.53=B. Comp-XM weights debt heavily, so ratings drop faster than a naive
+    get their actual Market Report S&P: Apex 1.74=BB, Borealis 1.90=BB, Crestline 2.66=B,
+    Dynamo 2.53=B. BizSim weights debt heavily, so ratings drop faster than a naive
     "AAA at 1.0" ladder (which wrongly gave every R0 company an 'A').
     """
     if leverage <= 1.0: return "AAA"
     if leverage <= 1.3: return "AA"
     if leverage <= 1.5: return "A"
     if leverage <= 1.7: return "BBB"
-    if leverage <= 2.1: return "BB"    # Andrews 1.74, Baldwin 1.90
-    if leverage <= 2.8: return "B"     # Chester 2.66, Digby 2.53
+    if leverage <= 2.1: return "BB"    # Apex 1.74, Borealis 1.90
+    if leverage <= 2.8: return "B"     # Crestline 2.66, Dynamo 2.53
     if leverage <= 3.5: return "CCC"
     if leverage <= 4.2: return "CC"
     if leverage <= 5.0: return "C"
-    return "D"
+    return "DDD"   # worst tier bottoms at DDD, not "D"
 
 
 def max_new_bond_capacity(company: Company) -> float:
     """How much more bond debt the company can take on."""
-    plant = sum(plant_value(p) for p in company.products)
+    # Bond capacity is based on the historical gross plant carried on the balance
+    # sheet, not a synthetic value rebuilt from today's automation setting.
+    plant = company.plant_value
     cap = plant * MAX_BOND_DEBT_RATIO
     current_bonds = sum(b.face_value for b in company.bonds)
     return max(0.0, cap - current_bonds)
@@ -100,7 +118,7 @@ def issue_bond(company: Company, amount: float, prime_rate: float, year: int) ->
     if amount <= 0:
         return {"issued": 0, "net_proceeds": 0, "rate": 0, "fee": 0, "series": None}
 
-    rate = long_term_rate(prime_rate, company.sp_rating) + 0.005  # +0.5% over LT rate base
+    rate = long_term_rate(prime_rate, company.sp_rating) + BOND_NEW_SPREAD
     fee = amount * BOND_BROKERAGE_FEE
     net_proceeds = amount - fee
 
@@ -114,7 +132,9 @@ def issue_bond(company: Company, amount: float, prime_rate: float, year: int) ->
         yield_to_maturity=rate,
     )
     company.bonds.append(new_bond)
-    company.cash += net_proceeds
+    # Add the face proceeds here. The brokerage fee is posted to transaction_other
+    # by the round engine, so it reaches both retained earnings and cash through NI.
+    company.cash += amount
     return {
         "issued": amount,
         "net_proceeds": net_proceeds,
@@ -137,7 +157,9 @@ def retire_bond_early(company: Company, series: str) -> Dict:
     fee = bond.face_value * EARLY_RETIRE_FEE
     total_out = cash_paid + fee
 
-    company.cash -= total_out
+    # Principal is a financing cash flow. Premium/discount and fee are posted through
+    # income_statement(transaction_other=...) so the books stay balanced.
+    company.cash -= bond.face_value
     company.bonds.remove(bond)
 
     return {
@@ -145,20 +167,30 @@ def retire_bond_early(company: Company, series: str) -> Dict:
         "cash_out": total_out,
         "fee": fee,
         "market_price": market_price,
+        "other_expense": total_out - bond.face_value,
     }
 
 
 def retire_matured_bonds(company: Company, current_year: int) -> List[Dict]:
     """
     Retire bonds that have matured (year_due <= current_year).
-    Pays face value out of cash (or converts to current debt if cash short).
+
+    A maturing bond's principal automatically rolls into current debt the
+    following year (the bank converts it to a 1-year note) — it is not paid out of
+    cash on the spot. (Was: deducted the full face from cash, which could crater cash
+    and trigger a spurious emergency loan the year a big bond matured.)
     """
     results = []
     for bond in list(company.bonds):
         if bond.year_due <= current_year:
-            company.cash -= bond.face_value
+            company.current_debt += bond.face_value   # roll into short-term debt
             company.bonds.remove(bond)
-            results.append({"matured": bond.series, "amount": bond.face_value})
+            results.append({
+                "matured": bond.series,
+                "amount": bond.face_value,
+                "final_coupon_interest": bond.face_value * bond.coupon_rate,
+                "rolled_to_current_debt": True,
+            })
     return results
 
 
@@ -168,42 +200,53 @@ def total_bond_interest(company: Company) -> float:
 
 
 def issue_stock(company: Company, amount: float, current_price: Optional[float] = None) -> Dict:
-    """Issue new stock. Adds to common_stock + cash, dilutes shares.
-    Rejects if amount <= $500K fee (would create negative net proceeds)."""
+    """Issue new stock at last close, 5% brokerage fee, capped at 20% of shares
+    outstanding per round. Adds net proceeds to common_stock + cash,
+    dilutes shares."""
     if current_price is None:
         current_price = company.stock_price
-    if current_price <= 0 or amount <= STOCK_ISSUE_FEE:
+    if current_price <= 0 or amount <= 0:
         return {"issued": 0, "shares": 0, "net": 0, "fee": 0, "rejected": True}
-    fee = STOCK_ISSUE_FEE
-    net = amount - fee
-    new_shares = int(net / current_price)
+    # `amount` is the requested gross raise. Shares are sold at market price, then
+    # the 5% brokerage fee is deducted from the cash/equity proceeds.
+    gross = amount
+    new_shares = int(gross / current_price)
+    # Cap at 20% of shares outstanding per round; recompute proceeds off the cap.
+    max_shares = int(company.shares_outstanding * STOCK_MAX_ISSUE_PCT)
+    if max_shares > 0 and new_shares > max_shares:
+        new_shares = max_shares
+        gross = new_shares * current_price
     if new_shares <= 0:
         return {"issued": 0, "shares": 0, "net": 0, "fee": 0, "rejected": True}
+    fee = gross * STOCK_ISSUE_FEE_PCT
+    net = gross - fee
     company.shares_outstanding += new_shares
     company.common_stock += net
     company.cash += net
-    return {"issued": amount, "shares": new_shares, "net": net, "fee": fee}
+    return {"issued": gross, "shares": new_shares, "net": net, "fee": fee}
 
 
 def buyback_stock(company: Company, amount: float, current_price: Optional[float] = None) -> Dict:
     """Buy back shares at current market price. Reduces shares and equity.
-    Capsim caps buyback at 5% of shares outstanding per round; also never lets
+    BizSim caps buyback at 5% of shares outstanding per round; also never lets
     shares go negative. (Was unclamped — a huge buyback drove shares_outstanding
     massively negative and triggered a bogus multi-billion emergency loan.)"""
     if current_price is None:
         current_price = company.stock_price
     if current_price <= 0 or amount <= 0:
         return {"bought": 0, "shares": 0}
-    max_shares = int(company.shares_outstanding * 0.05)   # Capsim 5%/round limit
+    max_shares = int(company.shares_outstanding * STOCK_MAX_BUYBACK_PCT)   # 5%/round limit
     shares = min(int(amount / current_price), max_shares)
     shares = max(0, min(shares, company.shares_outstanding - 1))  # keep >=1 share
     if shares <= 0:
-        return {"bought": 0, "shares": 0}
+        return {"bought": 0, "shares": 0, "fee": 0}
     actual_spend = shares * current_price
+    fee = actual_spend * STOCK_BUYBACK_FEE_PCT   # 1.5% brokerage fee on retirement
+    total_out = actual_spend + fee
     company.shares_outstanding -= shares
-    company.retained_earnings -= actual_spend  # reduces equity
-    company.cash -= actual_spend
-    return {"bought": actual_spend, "shares": shares, "price": current_price}
+    company.retained_earnings -= total_out  # equity down by cost + fee
+    company.cash -= total_out
+    return {"bought": actual_spend, "shares": shares, "price": current_price, "fee": fee}
 
 
 def pay_dividend(company: Company, per_share: float) -> float:
@@ -230,24 +273,36 @@ def emergency_loan_if_needed(company: Company, prime_rate: float) -> float:
 
 def update_stock_price(company: Company) -> float:
     """
-    Stock price update based on Book Value, EPS, Dividend.
+    Stock price = Book Value/share + 5×(2-yr avg EPS) + 2×(2-yr avg Dividend),
+    then an emergency-loan liquidity penalty.
 
-    Re-calibrated to be less punishing on dividend cuts (real Capsim
-    investors care more about EPS than dividend yield).
+    BizSim drives price off book value + the LAST TWO YEARS' EPS and dividend (not
+    just the current year), which smooths one-off swings. We keep the EPS-heavy
+    weights (5×EPS, 2×Div — investors reward earnings over payout) that calibrate
+    Apex R0 to ≈$95.38 (BV $34.65 + 5×$9.80 + 2×$6.50 = $96.65).
 
-    Old: BV + 3×EPS + 5×Div (heavy dividend dependence)
-    New: BV + 5×EPS + 2×Div (EPS-heavy, like real P/E investors)
-
-    Andrews R0: BV $34.65 + 5×$9.80 + 2×$6.50 = 34.65 + 49 + 13 = $96.65 ≈ $95.38 ✓
-    R2 with EPS dropped to $7.36 and div cut to $3:
-      Old: 39.02 + 22.08 + 15 = $76.10 (over-punished)
-      New: 39.02 + 36.80 + 6   = $81.82 (more realistic)
+    Dividend above EPS is ignored (unsustainable). Emergency loans depress the price
+    even when profitable: ≈ loan/shares, at least a 10% drop, floored at 50% of book.
     """
     bv_per_share = (company.total_equity / company.shares_outstanding
                     if company.shares_outstanding > 0 else 0)
-    eps = company.eps
-    div = company.dividend_per_share
-    new_price = bv_per_share + 5.0 * eps + 2.0 * div
+
+    # Record this year's EPS/dividend, then average over the last two years.
+    div_capped = min(company.dividend_per_share, max(0.0, company.eps))
+    company.eps_history.append(company.eps)
+    company.div_history.append(div_capped)
+    eps_2yr = sum(company.eps_history[-2:]) / len(company.eps_history[-2:])
+    div_2yr = sum(company.div_history[-2:]) / len(company.div_history[-2:])
+
+    new_price = bv_per_share + 5.0 * eps_2yr + 2.0 * div_2yr
+
+    # Emergency-loan liquidity penalty (applied to the computed price).
+    if company.emergency_loan > 0 and company.shares_outstanding > 0:
+        per_share_hit = company.emergency_loan / company.shares_outstanding
+        penalized = new_price - max(per_share_hit, 0.10 * new_price)  # >= 10% drop
+        floor = 0.50 * bv_per_share                                    # never below 50% of book
+        new_price = max(floor, penalized)
+
     company.stock_price = max(1.0, new_price)
     company.market_cap = company.stock_price * company.shares_outstanding
     return company.stock_price
@@ -256,8 +311,10 @@ def update_stock_price(company: Company) -> float:
 def compute_ratios(company: Company) -> Dict:
     """Compute key financial ratios."""
     sales = max(1, company.sales_last)
-    assets = max(1, company.total_assets)
-    equity = max(1, company.total_equity)
+    raw_assets = company.total_assets
+    raw_equity = company.total_equity
+    assets = max(1, raw_assets)
+    equity = max(1, raw_equity)
 
     ros = company.profit_last / sales
     asset_turnover = sales / assets
@@ -270,7 +327,9 @@ def compute_ratios(company: Company) -> Dict:
     company.roa = roa
     company.leverage = leverage
     company.roe = roe
-    company.sp_rating = calculate_credit_rating(leverage)
+    # Insolvent companies never receive an AAA rating merely because both the asset
+    # and equity denominators were clamped to one for safe division.
+    company.sp_rating = "DDD" if raw_assets <= 0 or raw_equity <= 0 else calculate_credit_rating(leverage)
     return {
         "ROS": ros, "Asset_Turnover": asset_turnover, "ROA": roa,
         "Leverage": leverage, "ROE": roe, "S&P": company.sp_rating,
@@ -279,7 +338,10 @@ def compute_ratios(company: Company) -> Dict:
 
 def income_statement(company: Company, year: int, prime_rate: float,
                      hr_admin_cost: float = 0, tqm_spend: float = 0,
-                     rd_cost: float = 0) -> Dict:
+                     rd_cost: float = 0, transaction_other: float = 0,
+                     depreciation: Optional[float] = None,
+                     rolled_current_debt: float = 0,
+                     matured_bond_interest: float = 0) -> Dict:
     """
     Compute Income Statement with proper cost reductions applied.
 
@@ -303,13 +365,13 @@ def income_statement(company: Company, year: int, prime_rate: float,
 
     # Variable COGS is charged on units SOLD, NOT produced — unsold production is
     # capitalized into inventory (an asset), not expensed. Verified against the real
-    # 2026 Inquirer: Andrews units_sold × (material+labor) + carry = $107.51M vs the
-    # Inquirer's $107.57M variable cost (0.06% match). Charging on units PRODUCED
+    # 2026 Market Report: Apex units_sold × (material+labor) + carry = $107.51M vs the
+    # Market Report's $107.57M variable cost (0.06% match). Charging on units PRODUCED
     # over-expensed by ~$23M and crushed net profit to $6M instead of $20.1M.
     #
     # The seed/realized labor cost per unit already reflects the round's shift blend,
     # so no separate 2nd-shift premium here — overproduction is penalized via inventory
-    # carrying cost (below) + the BSC plant-utilization score, matching Capsim's IS.
+    # carrying cost (below) + the BSC plant-utilization score, matching BizSim's IS.
     var_labor = 0.0
     var_material = 0.0
     for p in company.products:
@@ -318,22 +380,31 @@ def income_statement(company: Company, year: int, prime_rate: float,
         var_labor += base_labor * sold * 1000
         var_material += p.material_cost * (1 + tqm_mat) * sold * 1000
 
-    # Inventory carry: avg of (start, end) × 12% × unit cost
+    # Inventory carry: ending inventory × 12% × unit cost
     inv_carry = sum(inventory_carry_cost(p, p.inventory) for p in company.products)
     var_total = var_labor + var_material + inv_carry
     contribution = sales - var_total
 
-    depreciation = sum(annual_depreciation(p) for p in company.products)
+    if depreciation is None:
+        depreciation = company.plant_value / 15
     promo_total = sum(p.promo_budget for p in company.products)
     sales_total = sum(p.sales_budget for p in company.products)
     admin_base = sales * 0.015  # 1.5% of sales
     admin = admin_base * (1 + tqm_adm)  # TQM admin reduction
     sga = rd_cost + promo_total + sales_total + admin + hr_admin_cost
-    other = tqm_spend
+    other = tqm_spend + transaction_other
 
     ebit = contribution - depreciation - sga - other
-    st_interest = company.current_debt * short_term_rate(prime_rate)
-    lt_interest = total_bond_interest(company)
+    interest_bearing_current = max(0.0, company.current_debt - rolled_current_debt)
+    emergency_balance = min(max(0.0, company.emergency_loan), interest_bearing_current)
+    ordinary_current_debt = max(0.0, interest_bearing_current - emergency_balance)
+    emergency_interest = emergency_balance * emergency_loan_rate(prime_rate, company.sp_rating)
+    emergency_penalty_interest = emergency_balance * EMERGENCY_LOAN_PENALTY
+    st_interest = (ordinary_current_debt * short_term_rate(prime_rate, company.sp_rating)
+                   + emergency_interest)
+    # A bond maturing at year-end pays its final coupon this year. Its principal then
+    # rolls to current debt, whose short-term interest begins next round.
+    lt_interest = total_bond_interest(company) + matured_bond_interest
     pretax = ebit - st_interest - lt_interest
     taxes = max(0, pretax * TAX_RATE)
     after_tax = pretax - taxes
@@ -362,8 +433,11 @@ def income_statement(company: Company, year: int, prime_rate: float,
         "hr_admin": hr_admin_cost,
         "sga": sga,
         "tqm": tqm_spend,
+        "transaction_other": transaction_other,
+        "other": other,
         "ebit": ebit,
         "short_term_interest": st_interest,
+        "emergency_penalty_interest": emergency_penalty_interest,
         "long_term_interest": lt_interest,
         "pretax_income": pretax,
         "taxes": taxes,
@@ -471,7 +545,7 @@ def project_next_round_pl(state, company: Company, pending) -> Dict:
 
     contribution = proj_sales - proj_var_labor - proj_var_material
     ebit = contribution - depreciation - sga - tqm_round_spend
-    st_int = company.current_debt * short_term_rate(state.prime_interest_rate)
+    st_int = company.current_debt * short_term_rate(state.prime_interest_rate, company.sp_rating)
     lt_int = total_bond_interest(company)
     pretax = ebit - st_int - lt_int
     taxes = max(0, pretax * TAX_RATE)

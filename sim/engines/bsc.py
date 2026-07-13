@@ -1,10 +1,10 @@
 """
 Balanced Scorecard scoring engine.
 
-Per Capsim Comp-XM Balanced Scorecard (4 perspectives, ~125 pts each per round
+Per BizSim Balanced Scorecard (4 perspectives, ~125 pts each per round
 + 500 pts cumulative final = 1000 total):
 
-Standard per-round BSC (rough approximations from public Capsim docs):
+Standard per-round BSC (BizSim calibration):
 
 FINANCIAL (per round):
   - Stock Price: 8 pts (target: increase)
@@ -38,7 +38,7 @@ FINAL CUMULATIVE (500 pts):
   - Asset Turnover trend (40 pts)
   - Etc.
 
-NOTE: Real Capsim BSC weights are proprietary; these are approximations.
+NOTE: BizSim BSC weights are simulation-specific approximations.
 """
 from __future__ import annotations
 from typing import Dict, List
@@ -74,9 +74,18 @@ WEIGHTS = {
     },
 }
 
+# Sum of every per-round metric max (financial 30 + internal 20 + customer 35 +
+# learning 23). compute_round_bsc scales its raw total by 100/ROUND_RAW_MAX so each
+# round is a clean 100-point scorecard (4 rounds + Recap = 500 BSC).
+ROUND_RAW_MAX = sum(pts for group in WEIGHTS.values() for pts in group.values())
+
+# Recap raw maxes: financial 200 (cum profit 100 + stock growth 50 + ROE 50) + internal
+# 100 + customer 100 + learning 100 = 500. compute_cumulative_bsc scales by 100/this.
+RECAP_RAW_MAX = 500.0
+
 
 def stock_price_score(current: float, last_round: float, max_pts: int = 8) -> float:
-    """Absolute stock price (Comp-XM threshold): full at >=$80, partial $40-80, low below."""
+    """Absolute stock price (BizSim threshold): full at >=$80, partial $40-80, low below."""
     if current >= 80:
         return float(max_pts)
     if current >= 40:
@@ -85,7 +94,7 @@ def stock_price_score(current: float, last_round: float, max_pts: int = 8) -> fl
 
 
 def profit_score(profit_m: float, max_pts: int = 9) -> float:
-    """Profit score: full at $7M+/round (Comp-XM threshold), scaled below."""
+    """Profit score: full at $7M+/round (BizSim threshold), scaled below."""
     return min(max_pts, max(0, profit_m / 7.0 * max_pts))
 
 
@@ -99,7 +108,7 @@ def leverage_score(lev: float, max_pts: int = 8) -> float:
 
 
 def contribution_margin_score(cm_pct: float, max_pts: int = 5) -> float:
-    """Full at 36%+ (Comp-XM target), partial 30-36%, scaled below."""
+    """Full at 36%+ (BizSim target), partial 30-36%, scaled below."""
     if cm_pct >= 0.36:
         return float(max_pts)
     if cm_pct >= 0.30:
@@ -108,9 +117,9 @@ def contribution_margin_score(cm_pct: float, max_pts: int = 5) -> float:
 
 
 def plant_util_score(util_pct: float, max_pts: int = 5) -> float:
-    """Comp-XM: 150-200% is IDEAL (2nd shift used efficiently), 100-150% partial,
+    """BizSim: 150-200% is IDEAL (2nd shift used efficiently), 100-150% partial,
     <100% wasted capacity, >200% impossible/penalized. (Was penalizing 150%+, which
-    is exactly the good behavior — Andrews R0 ran Attic at 188%.)"""
+    is exactly the good behavior — Apex R0 ran Atlas at 188%.)"""
     if 150 <= util_pct <= 200:
         return float(max_pts)
     if 100 <= util_pct < 150:
@@ -153,7 +162,7 @@ def product_count_score(active_products: int, max_pts: int = 5) -> float:
 
 
 def sga_score(sga_pct: float, max_pts: int = 5) -> float:
-    """Comp-XM: SG&A/Sales <=12% = full, scaling down above that."""
+    """BizSim: SG&A/Sales <=12% = full, scaling down above that."""
     if sga_pct <= 0.12:
         return float(max_pts)
     return max(0, max_pts * (1 - (sga_pct - 0.12) / 0.13))  # 0 at 25%
@@ -173,7 +182,7 @@ def productivity_score(pi: float, max_pts: int = 7) -> float:
 
 
 def turnover_score(turnover_rate: float, max_pts: int = 6) -> float:
-    """Comp-XM: turnover <=7% = full, scaling down to 0 at ~12%."""
+    """BizSim: turnover <=7% = full, scaling down to 0 at ~12%."""
     if turnover_rate <= 0.07:
         return float(max_pts)
     return max(0, max_pts * (1 - (turnover_rate - 0.07) / 0.05))
@@ -191,7 +200,7 @@ def tqm_invest_score(tqm_cumulative: float, max_pts: int = 5) -> float:
     return max(0, max_pts * (tqm_cumulative / 4_000_000))
 
 
-def compute_round_bsc(state: GameState, company_name: str = "Andrews",
+def compute_round_bsc(state: GameState, company_name: str = "Apex",
                       prev_state: GameState = None) -> BSCScore:
     """Compute BSC for one round."""
     c = state.get_company(company_name)
@@ -205,7 +214,7 @@ def compute_round_bsc(state: GameState, company_name: str = "Andrews",
     cm_pct = c.contribution_margin_last / max(1, c.sales_last)
     fin_cm = contribution_margin_score(cm_pct)
     financial = fin_stock + fin_profit + fin_lev + fin_cm
-    # Emergency loan = severe penalty (Comp-XM: -50 to -100 pts of 1000; here the
+    # Emergency loan = severe penalty (BizSim: -50 to -100 pts of 1000; here the
     # per-round financial max is ~30, so scale a heavy deduction). Missing before.
     emergency_penalty = 0.0
     if c.emergency_loan > 10_000_000:
@@ -236,7 +245,9 @@ def compute_round_bsc(state: GameState, company_name: str = "Andrews",
     else:
         days_wc = 60
     ib_wc = working_capital_score(days_wc)
-    ib_stockout = stockout_score(0, sum(p.units_sold_last for p in c.products))  # approx
+    potential = sum(p.potential_demand_last for p in c.products)
+    stockout_units = sum(max(0, p.potential_demand_last - p.units_sold_last) for p in c.products)
+    ib_stockout = stockout_score(stockout_units, potential)
     inv_carry_total = sum(inventory_carry_cost(p, p.inventory) for p in c.products)
     inv_pct = inv_carry_total / max(1, c.sales_last)
     ib_inv = inventory_score(inv_pct)
@@ -281,6 +292,14 @@ def compute_round_bsc(state: GameState, company_name: str = "Andrews",
         "lg_hr_invest": lg_hr, "lg_tqm_invest": lg_tqm,
     })
 
+    # Normalize to a 100-point round scorecard: 100/round × 4 rounds
+    # + a 100-point Recap = 500 BSC; the other 500 points are Board Queries (see app +
+    # compute_cumulative_bsc). Raw metric maxes sum to ROUND_RAW_MAX.
+    _scale = 100.0 / ROUND_RAW_MAX
+    financial *= _scale
+    internal_business *= _scale
+    customer *= _scale
+    learning_growth *= _scale
     total = financial + internal_business + customer + learning_growth
 
     return BSCScore(
@@ -295,7 +314,7 @@ def compute_round_bsc(state: GameState, company_name: str = "Andrews",
 
 
 def compute_cumulative_bsc(history, state: GameState,
-                            company_name: str = "Andrews") -> BSCScore:
+                            company_name: str = "Apex") -> BSCScore:
     """
     Final cumulative BSC (500 pts, evaluated after R4).
     Based on average + trend across all 4 rounds.
@@ -317,10 +336,10 @@ def compute_cumulative_bsc(history, state: GameState,
 
     # Financial: cumulative profit + stock growth
     cum_profit_m = c.cumulative_profit / 1e6
-    fin_cum_profit = min(100, cum_profit_m)  # +1pt per $1M, cap $100M = 100
+    fin_cum_profit = min(100, max(0, cum_profit_m))
     # Initial stock $95.38 (R0), score by current vs initial
     fin_stock_growth = min(50, max(0, (c.stock_price - 95.38) * 0.5))
-    fin_avg_roe = min(50, c.roe * 200)  # 25% ROE = 50 pts
+    fin_avg_roe = min(50, max(0, c.roe * 200))
     financial = fin_cum_profit + fin_stock_growth + fin_avg_roe
 
     # Internal Business: avg utilization, avg inventory mgmt
@@ -328,17 +347,24 @@ def compute_cumulative_bsc(history, state: GameState,
     avg_wc = sum(_metrics(h).get("ib_working_capital", 0) for h in history) / len(history)
     avg_stock = sum(_metrics(h).get("ib_stockout", 0) for h in history) / len(history)
     avg_inv = sum(_metrics(h).get("ib_inventory", 0) for h in history) / len(history)
-    internal_business = (avg_util + avg_wc + avg_stock + avg_inv) * 5  # scale to 100 max
+    internal_business = min(100, max(0, (avg_util + avg_wc + avg_stock + avg_inv) * 5))
 
     # Customer: avg survey, market share
     avg_survey = sum(_metrics(h).get("cu_customer_survey", 0) for h in history) / len(history)
-    customer = avg_survey * 5  # max 100
+    customer = min(100, max(0, avg_survey * 5))
 
     # Learning & Growth: max PI achieved, total TQM
-    lg_max_pi = (c.hr.productivity_index - 1.0) * 250  # PI 1.20 = 50 pts
+    lg_max_pi = min(50, max(0, (c.hr.productivity_index - 1.0) * 250))  # PI 1.20 = 50 pts
     lg_tqm = min(50, c.tqm.total_expenditures / 1e6 * 5)  # $10M+ = 50 pts
-    learning_growth = lg_max_pi + lg_tqm
+    learning_growth = min(100, max(0, lg_max_pi + lg_tqm))
 
+    # Normalize the Recap to 100 points (raw maxes: financial 200 + internal/customer/
+    # learning 100 each = 500) so BSC total = 4×100 rounds + 100 Recap = 500.
+    _scale = 100.0 / RECAP_RAW_MAX
+    financial *= _scale
+    internal_business *= _scale
+    customer *= _scale
+    learning_growth *= _scale
     total = financial + internal_business + customer + learning_growth
 
     return BSCScore(
@@ -361,8 +387,8 @@ def compute_cumulative_bsc(history, state: GameState,
 if __name__ == "__main__":
     from sim.data.r0_seed import build_r0_state
     state = build_r0_state()
-    bsc = compute_round_bsc(state, "Andrews")
-    print("=== Andrews R0 BSC ===")
+    bsc = compute_round_bsc(state, "Apex")
+    print("=== Apex R0 BSC ===")
     print(f"Financial:         {bsc.financial:.1f}")
     print(f"Internal Business: {bsc.internal_business:.1f}")
     print(f"Customer:          {bsc.customer:.1f}")

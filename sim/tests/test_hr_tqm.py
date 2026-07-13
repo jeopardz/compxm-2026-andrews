@@ -68,13 +68,13 @@ class TestHRTurnover:
 
 class TestHRUpdate:
     def test_update_hr_sets_pi(self, state):
-        andrews = state.get_company("Andrews")
-        for p in andrews.products:
+        apex = state.get_company("Apex")
+        for p in apex.products:
             p.production_schedule = p.capacity_first_shift
-        result = update_hr(andrews, 5000, 80)
+        result = update_hr(apex, 5000, 80)
         assert result["productivity_index"] == pytest.approx(1.18, abs=0.005)
         assert result["turnover_rate"] == pytest.approx(0.05, abs=0.005)
-        assert andrews.hr.productivity_index == pytest.approx(1.18, abs=0.005)
+        assert apex.hr.productivity_index == pytest.approx(1.18, abs=0.005)
 
 
 # ---------------- TQM ----------------
@@ -97,24 +97,24 @@ class TestTQMUpdate:
         assert len(TQM_IMPACTS) == 10
 
     def test_per_round_cap_enforced(self, state):
-        andrews = state.get_company("Andrews")
+        apex = state.get_company("Apex")
         # Try to spend $5M on one initiative (over $2M cap)
-        update_tqm(andrews, {"QFD Effort": 5_000_000})
+        update_tqm(apex, {"QFD Effort": 5_000_000})
         # Cumulative should be capped at $2M for this round
-        assert andrews.tqm.cumulative_spend["QFD Effort"] == TQM_PER_ROUND_CAP
+        assert apex.tqm.cumulative_spend["QFD Effort"] == TQM_PER_ROUND_CAP
 
     def test_unknown_initiative_ignored(self, state):
-        andrews = state.get_company("Andrews")
-        result = update_tqm(andrews, {"FakeInitiative": 1_000_000})
+        apex = state.get_company("Apex")
+        result = update_tqm(apex, {"FakeInitiative": 1_000_000})
         assert result["round_spend"] == 0
-        assert "FakeInitiative" not in andrews.tqm.cumulative_spend
+        assert "FakeInitiative" not in apex.tqm.cumulative_spend
 
     def test_cumulative_accumulates(self, state):
-        andrews = state.get_company("Andrews")
-        update_tqm(andrews, {"QFD Effort": 1_500_000})
-        update_tqm(andrews, {"QFD Effort": 1_500_000})
+        apex = state.get_company("Apex")
+        update_tqm(apex, {"QFD Effort": 1_500_000})
+        update_tqm(apex, {"QFD Effort": 1_500_000})
         # Two rounds at $1.5M each -> $3M cumulative
-        assert andrews.tqm.cumulative_spend["QFD Effort"] == pytest.approx(3_000_000)
+        assert apex.tqm.cumulative_spend["QFD Effort"] == pytest.approx(3_000_000)
 
     def test_recommended_initiatives_for_rounds(self):
         # R1 should recommend 6 initiatives totaling $9M
@@ -128,11 +128,12 @@ class TestTQMUpdate:
         assert recommended_initiatives_for_round(99) == {}
 
     def test_qfd_increases_demand(self, state):
-        andrews = state.get_company("Andrews")
+        apex = state.get_company("Apex")
         # Spend $2M on QFD over 2 rounds -> $4M cumulative -> full effect
-        update_tqm(andrews, {"QFD Effort": 2_000_000})
-        update_tqm(andrews, {"QFD Effort": 2_000_000})
-        # QFD impact is +0.07 demand
-        assert andrews.tqm.demand_increase > 0
-        # Should be close to 0.07 (might be capped if multiple initiatives)
-        assert andrews.tqm.demand_increase == pytest.approx(0.07, abs=0.005)
+        update_tqm(apex, {"QFD Effort": 2_000_000})
+        update_tqm(apex, {"QFD Effort": 2_000_000})
+        # QFD (authentic mapping) = +0.045 demand + R&D cycle-time cut
+        assert apex.tqm.demand_increase > 0
+        assert apex.tqm.demand_increase == pytest.approx(0.045, abs=0.005)
+        # QFD also shortens R&D cycle time now (its authentic second effect)
+        assert apex.tqm.rd_cycle_time_reduction < 0

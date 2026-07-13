@@ -10,11 +10,16 @@ from sim.engines.customer_score import (
     age_score,
     mtbf_score,
     position_score,
+    position_multiplier,
+    price_multiplier,
+    mtbf_multiplier,
+    ar_reduction,
     in_rough_cut,
     weighted_score,
     net_score,
     score_breakdown,
     FINE_CUT_RADIUS,
+    ROUGH_CUT_RADIUS,
 )
 
 
@@ -30,23 +35,59 @@ class TestPriceScore:
         assert price_score(thrift.price_min, thrift) == pytest.approx(100.0, abs=0.01)
 
     def test_price_below_floor_is_max(self, state):
-        # Capsim: pricing AT or BELOW the floor = max price appeal (you lose margin,
-        # not demand). Previously this wrongly returned 0 (Attic-at-$13 bug).
+        # BizSim: pricing AT or BELOW the floor = max price appeal (you lose margin,
+        # not demand). Previously this wrongly returned 0 (Atlas-at-$13 bug).
         thrift = state.get_segment("Thrift")  # range 14-26
         assert price_score(13.99, thrift) == pytest.approx(100.0)
         assert price_score(10.0, thrift) == pytest.approx(100.0)
-
-    def test_price_above_max_tapers_to_zero(self, state):
-        # Just over max keeps a little appeal; ~$6 over = 0 demand.
-        thrift = state.get_segment("Thrift")  # range 14-26
-        assert price_score(26.01, thrift) < 10.0
-        assert price_score(26.01, thrift) > 0.0
-        assert price_score(32.01, thrift) == 0.0  # >$6 above max
 
     def test_price_at_max_lowest(self, state):
         thrift = state.get_segment("Thrift")
         # Linear: at max returns 100*(1 - 1.0*0.9) = 10.0
         assert price_score(thrift.price_max, thrift) == pytest.approx(10.0, abs=0.01)
+
+    def test_price_above_max_clamps_at_10(self, state):
+        # Over-ceiling appeal is clamped at 10 in the in-band score; the DEMAND penalty
+        # is applied by price_multiplier(), not baked into price_score.
+        thrift = state.get_segment("Thrift")
+        assert price_score(30.0, thrift) == pytest.approx(10.0)
+
+
+class TestWholeScoreMultipliers:
+    def test_price_multiplier_over_ceiling(self, state):
+        thrift = state.get_segment("Thrift")  # ceiling 26
+        assert price_multiplier(26.0, thrift) == pytest.approx(1.0)   # in band
+        assert price_multiplier(20.0, thrift) == pytest.approx(1.0)   # below floor = no penalty
+        assert price_multiplier(27.0, thrift) == pytest.approx(0.80)  # $1 over -> -20%
+        assert price_multiplier(28.0, thrift) == pytest.approx(0.60)  # $2 over -> -40%
+        assert price_multiplier(31.0, thrift) == pytest.approx(0.0)   # $5+ over -> 0
+
+    def test_mtbf_multiplier_below_min(self, state):
+        elite = state.get_segment("Elite")  # min 20000
+        assert mtbf_multiplier(20000, elite) == pytest.approx(1.0)
+        assert mtbf_multiplier(30000, elite) == pytest.approx(1.0)   # above max fine
+        assert mtbf_multiplier(19000, elite) == pytest.approx(0.80)  # 1000 below -> -20%
+        assert mtbf_multiplier(15000, elite) == pytest.approx(0.0)   # 5000 below -> 0
+
+    def test_position_multiplier_rough_cut(self, state):
+        thrift = state.get_segment("Thrift")
+        atlas = state.get_company("Apex").products[0]
+        atlas.size = thrift.ideal_size
+        atlas.pfmn = thrift.ideal_pfmn          # at ideal -> full
+        assert position_multiplier(atlas, thrift) == pytest.approx(1.0)
+        atlas.pfmn = thrift.ideal_pfmn + FINE_CUT_RADIUS   # fine-cut edge -> still 1.0
+        assert position_multiplier(atlas, thrift) == pytest.approx(1.0)
+        atlas.pfmn = thrift.ideal_pfmn + (FINE_CUT_RADIUS + ROUGH_CUT_RADIUS) / 2  # mid rough band
+        assert position_multiplier(atlas, thrift) == pytest.approx(0.5, abs=0.01)
+        atlas.pfmn = thrift.ideal_pfmn + ROUGH_CUT_RADIUS + 0.1   # beyond rough -> 0
+        assert position_multiplier(atlas, thrift) == pytest.approx(0.0)
+
+    def test_ar_reduction_table(self):
+        assert ar_reduction(90) == pytest.approx(0.0)
+        assert ar_reduction(60) == pytest.approx(0.007)
+        assert ar_reduction(30) == pytest.approx(0.07)
+        assert ar_reduction(0) == pytest.approx(0.40)
+        assert ar_reduction(None) == 0.0
 
 
 class TestMTBFScore:
@@ -60,11 +101,11 @@ class TestMTBFScore:
         elite = state.get_segment("Elite")
         assert mtbf_score(elite.mtbf_min, elite) == pytest.approx(70.0)
 
-    def test_mtbf_below_min_decays(self, state):
+    def test_mtbf_below_min_clamps_at_70(self, state):
+        # In-band score clamps at 70 at/below min; the below-min DEMAND penalty is
+        # applied by mtbf_multiplier(), not baked into mtbf_score.
         elite = state.get_segment("Elite")
-        # 1000 below min -> 70 - 1000/100 = 60
-        score = mtbf_score(elite.mtbf_min - 1000, elite)
-        assert score == pytest.approx(60.0)
+        assert mtbf_score(elite.mtbf_min - 1000, elite) == pytest.approx(70.0)
 
 
 class TestAgeScore:
@@ -82,62 +123,61 @@ class TestPositionAndRoughCut:
     def test_position_at_ideal_is_max(self, state):
         thrift = state.get_segment("Thrift")
         # Make a synthetic product at the segment's ideal spot
-        attic = state.get_company("Andrews").products[0]
-        attic.pfmn = thrift.ideal_pfmn
-        attic.size = thrift.ideal_size
-        assert position_score(attic, thrift) == pytest.approx(100.0)
+        atlas = state.get_company("Apex").products[0]
+        atlas.pfmn = thrift.ideal_pfmn
+        atlas.size = thrift.ideal_size
+        assert position_score(atlas, thrift) == pytest.approx(100.0)
 
-    def test_position_tapers_not_cliff(self, state):
-        # Capsim: position falls off gradually, not a hard cliff at the fine-cut edge.
+    def test_position_score_in_band_floor(self, state):
+        # In-band positioning appeal: 100 at ideal, 40 at the fine-cut edge, and floored
+        # at 40 beyond it (the rough-cut demand penalty is position_multiplier's job).
         thrift = state.get_segment("Thrift")
-        attic = state.get_company("Andrews").products[0]
-        attic.size = thrift.ideal_size
-        # At fine-cut edge: partial score (not 0), at ROUGH-cut edge: 0
-        from sim.engines.customer_score import ROUGH_CUT_RADIUS
-        attic.pfmn = thrift.ideal_pfmn + FINE_CUT_RADIUS
-        assert position_score(attic, thrift) == pytest.approx(40.0, abs=0.01)
-        attic.pfmn = thrift.ideal_pfmn + ROUGH_CUT_RADIUS + 0.1
-        assert position_score(attic, thrift) == 0.0
+        atlas = state.get_company("Apex").products[0]
+        atlas.size = thrift.ideal_size
+        atlas.pfmn = thrift.ideal_pfmn + FINE_CUT_RADIUS
+        assert position_score(atlas, thrift) == pytest.approx(40.0, abs=0.01)
+        atlas.pfmn = thrift.ideal_pfmn + ROUGH_CUT_RADIUS + 0.1
+        assert position_score(atlas, thrift) == pytest.approx(40.0)  # floored (penalty via multiplier)
 
     def test_rough_cut_membership(self, state):
-        attic = state.get_company("Andrews").products[0]
-        # Attic primary segment is Thrift
+        atlas = state.get_company("Apex").products[0]
+        # Atlas primary segment is Thrift
         thrift = state.get_segment("Thrift")
-        assert in_rough_cut(attic, thrift) is True
+        assert in_rough_cut(atlas, thrift) is True
         # And NOT in Elite rough cut
         elite = state.get_segment("Elite")
-        assert in_rough_cut(attic, elite) is False
+        assert in_rough_cut(atlas, elite) is False
 
 
 class TestWeightedAndNetScore:
     def test_weighted_score_outside_rough_cut_zero(self, state):
-        attic = state.get_company("Andrews").products[0]
+        atlas = state.get_company("Apex").products[0]
         elite = state.get_segment("Elite")
-        assert weighted_score(attic, elite) == 0.0
+        assert weighted_score(atlas, elite) == 0.0
 
-    def test_net_score_andrews_products_have_positive_primary(self, state):
-        # Each Andrews product should have a positive net score in its primary segment
-        for p in state.get_company("Andrews").products:
+    def test_net_score_apex_products_have_positive_primary(self, state):
+        # Each Apex product should have a positive net score in its primary segment
+        for p in state.get_company("Apex").products:
             seg = state.get_segment(p.primary_segment)
             score = net_score(p, seg)
             assert score > 0, f"{p.name} should score > 0 in {seg.name}"
 
     def test_net_score_at_least_quarter_of_base(self, state):
         """Per net_score formula: net = base * (1+aw)/2 * (1+acc)/2 — min 25% of base."""
-        attic = state.get_company("Andrews").products[0]
+        atlas = state.get_company("Apex").products[0]
         # Zero out awareness/accessibility
-        attic.awareness = 0.0
-        attic.accessibility = {}
+        atlas.awareness = 0.0
+        atlas.accessibility = {}
         thrift = state.get_segment("Thrift")
-        base = weighted_score(attic, thrift)
-        net = net_score(attic, thrift)
+        base = weighted_score(atlas, thrift)
+        net = net_score(atlas, thrift)
         if base > 0:
             assert net == pytest.approx(base * 0.25, rel=0.01)
 
     def test_score_breakdown_returns_keys(self, state):
-        attic = state.get_company("Andrews").products[0]
+        atlas = state.get_company("Apex").products[0]
         thrift = state.get_segment("Thrift")
-        bd = score_breakdown(attic, thrift)
+        bd = score_breakdown(atlas, thrift)
         for key in ["product", "segment", "in_rough_cut", "price_raw", "age_raw",
                     "mtbf_raw", "position_raw", "weighted_total", "net_score"]:
             assert key in bd

@@ -1,7 +1,7 @@
 """
-HR engine — OLD Comp-XM version (3 decisions per company per round).
+HR engine — BizSim version (3 decisions per company per round).
 
-Per Capsim HR Guide:
+Per BizSim HR model:
   - Workforce Complement: Total employees needed (entered on Production page)
     Each unit of production needs ~0.0007 employees (approximate)
   - Recruit Spend: $0-$5,000 per new employee above auto $1,000
@@ -13,7 +13,7 @@ Per Capsim HR Guide:
   - Turnover Rate: 10% default, drops to ~5% with high training
   - Annual Raise: ~5% in labor contract (default)
 
-Reference: Capsim HR Guide
+Reference: BizSim HR model
 """
 from __future__ import annotations
 from typing import Dict
@@ -33,7 +33,7 @@ BENEFITS_PER_EMPLOYEE = 2500      # $/yr
 def employees_needed(company: Company) -> int:
     """
     Estimate employees needed from total production units (thousands).
-    Calibrated to Andrews R0: 804 employees / 5594 unit-thousands ≈ 0.144.
+    Calibrated to Apex R0: 804 employees / 5594 unit-thousands ≈ 0.144.
     """
     total_production = sum(p.production_schedule for p in company.products)
     return max(50, int(total_production * 0.144))
@@ -69,7 +69,7 @@ def training_cost(complement: int, training_hours: int) -> float:
 
 def separation_cost(separated_employees: int) -> float:
     """Cost to lay off employees: 0 for natural turnover."""
-    return 0.0  # Capsim has separation cost only for forced layoffs (not modeled)
+    return 0.0  # BizSim has separation cost only for forced layoffs (not modeled)
 
 
 def labor_wages_total(complement: int) -> float:
@@ -85,7 +85,14 @@ def update_hr(company: Company, recruit_spend: float, training_hours: int) -> Di
     needed = employees_needed(company)
     current = company.hr.workforce_complement
 
-    new_pi = productivity_index(recruit_spend, training_hours)
+    # Productivity Index is cumulative across rounds: each round's HR spend
+    # adds to the prior index, with diminishing returns toward a ~1.30 ceiling. Investing
+    # the max every round compounds 1.0 → 1.18 → 1.25 → 1.28 … (was recomputed fresh each
+    # round, so sustained investment never paid off beyond a single round's 1.18).
+    prev_pi = company.hr.productivity_index
+    round_gain = productivity_index(recruit_spend, training_hours) - 1.0
+    new_pi = prev_pi + round_gain * max(0.0, 1 - (prev_pi - 1.0) / 0.30)
+    new_pi = min(1.30, max(1.0, new_pi))
     new_turnover = turnover_rate(training_hours)
 
     # Employees that turn over this year
@@ -146,9 +153,9 @@ if __name__ == "__main__":
     state = build_r0_state()
     print("=== HR Module demo ===\n")
 
-    andrews = state.get_company("Andrews")
-    print(f"Andrews current PI: {andrews.hr.productivity_index:.3f}")
-    print(f"Employees needed (estimated): {employees_needed(andrews)}")
+    apex = state.get_company("Apex")
+    print(f"Apex current PI: {apex.hr.productivity_index:.3f}")
+    print(f"Employees needed (estimated): {employees_needed(apex)}")
 
     print("\nHR investment scenarios:")
     for rspend, thours in [(0, 0), (2500, 40), (5000, 80)]:

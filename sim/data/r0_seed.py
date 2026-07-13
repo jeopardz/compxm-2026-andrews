@@ -1,8 +1,8 @@
 """
-R0 (Dec 31, 2025) starting state for Comp-XM 2026 Andrews simulation.
+R0 (Dec 31, 2025) starting state for BizSim 2026 Apex simulation.
 Data sourced from:
-  - Comp-XM Industry Conditions Report 2026 (segments, drift, growth, buying criteria)
-  - Comp-XM Inquirer Report 2026 R0 (companies, products, financials, bonds)
+  - BizSim Industry Conditions Report 2026 (segments, drift, growth, buying criteria)
+  - BizSim Market Report Report 2026 R0 (companies, products, financials, bonds)
 """
 from sim.data_models import (
     Segment, Product, Company, Bond, GameState, HRState, TQMState,
@@ -61,23 +61,23 @@ SEGMENTS = [
 
 
 # ============================================================
-# PRODUCTS by company (R0 state, from Inquirer Production Analysis)
+# PRODUCTS by company (R0 state, from Market Report Production Analysis)
 # ============================================================
 
-# --- ANDREWS (Broad, leading) ---
-ANDREWS_PRODUCTS = [
+# --- APEX (Broad, leading) ---
+APEX_PRODUCTS = [
     Product(
-        name="Attic", company="Andrews", primary_segment="Thrift",
+        name="Atlas", company="Apex", primary_segment="Thrift",
         pfmn=4.9, size=15.1, mtbf=20000,
         revision_date="2023-04-13", age=5.1,
         price=26.00, promo_budget=1200000, sales_budget=2000000,
         automation=6.0, capacity_first_shift=1130,
         inventory=761, units_sold_last=1368, units_produced_last=2124,
         material_cost=8.13, labor_cost=7.90,
-        awareness=0.79, accessibility={"Thrift": 0.74},  # Inquirer p5: aware 79%, access 74%
+        awareness=0.79, accessibility={"Thrift": 0.74},  # Market Report p5: aware 79%, access 74%
     ),
     Product(
-        name="Axe", company="Andrews", primary_segment="Core",
+        name="Axiom", company="Apex", primary_segment="Core",
         pfmn=7.6, size=12.4, mtbf=22000,
         revision_date="2024-12-09", age=2.2,
         price=32.00, promo_budget=1200000, sales_budget=1000000,
@@ -87,7 +87,7 @@ ANDREWS_PRODUCTS = [
         awareness=0.80, accessibility={"Core": 0.85},
     ),
     Product(
-        name="Art", company="Andrews", primary_segment="Nano",
+        name="Arc", company="Apex", primary_segment="Nano",
         pfmn=10.3, size=7.8, mtbf=24000,
         revision_date="2025-11-09", age=1.1,
         price=40.00, promo_budget=1200000, sales_budget=1000000,
@@ -97,7 +97,7 @@ ANDREWS_PRODUCTS = [
         awareness=0.78, accessibility={"Nano": 0.82},
     ),
     Product(
-        name="Ant", company="Andrews", primary_segment="Elite",
+        name="Aura", company="Apex", primary_segment="Elite",
         pfmn=12.4, size=9.8, mtbf=26000,
         revision_date="2025-11-14", age=1.1,
         price=42.00, promo_budget=1200000, sales_budget=1000000,
@@ -108,10 +108,10 @@ ANDREWS_PRODUCTS = [
     ),
 ]
 
-# --- BALDWIN (Niche High Tech: Nano+Elite) ---
-BALDWIN_PRODUCTS = [
+# --- BOREALIS (Niche High Tech: Nano+Elite) ---
+BOREALIS_PRODUCTS = [
     Product(
-        name="Best", company="Baldwin", primary_segment="Nano",
+        name="Beacon", company="Borealis", primary_segment="Nano",
         pfmn=8.6, size=9.6, mtbf=23000,
         revision_date="2025-11-12", age=2.2,
         price=30.00, promo_budget=1100000, sales_budget=1200000,
@@ -121,7 +121,7 @@ BALDWIN_PRODUCTS = [
         awareness=0.70, accessibility={"Nano": 0.81},
     ),
     Product(
-        name="Bam", company="Baldwin", primary_segment="Elite",
+        name="Brio", company="Borealis", primary_segment="Elite",
         pfmn=11.8, size=9.8, mtbf=25000,
         revision_date="2025-12-13", age=1.9,
         price=39.00, promo_budget=950000, sales_budget=1000000,
@@ -131,7 +131,7 @@ BALDWIN_PRODUCTS = [
         awareness=0.72, accessibility={"Elite": 0.81},
     ),
     Product(
-        name="Bell", company="Baldwin", primary_segment="Nano",
+        name="Bloom", company="Borealis", primary_segment="Nano",
         pfmn=10.2, size=7.8, mtbf=23000,
         revision_date="2025-12-22", age=1.0,
         price=37.00, promo_budget=1200000, sales_budget=600000,
@@ -141,7 +141,7 @@ BALDWIN_PRODUCTS = [
         awareness=0.69, accessibility={"Nano": 0.66},
     ),
     Product(
-        name="Bit", company="Baldwin", primary_segment="Elite",
+        name="Bolt", company="Borealis", primary_segment="Elite",
         pfmn=12.2, size=9.8, mtbf=25000,
         revision_date="2025-12-05", age=1.0,
         price=42.00, promo_budget=1100000, sales_budget=1200000,
@@ -152,10 +152,10 @@ BALDWIN_PRODUCTS = [
     ),
 ]
 
-# --- CHESTER (Niche Low Tech: Thrift+Core) ---
-CHESTER_PRODUCTS = [
+# --- CRESTLINE (Niche Low Tech: Thrift+Core) ---
+CRESTLINE_PRODUCTS = [
     Product(
-        name="Creak", company="Chester", primary_segment="Thrift",
+        name="Cedar", company="Crestline", primary_segment="Thrift",
         pfmn=6.0, size=14.0, mtbf=17000,
         revision_date="2025-12-11", age=2.8,
         price=19.00, promo_budget=1050000, sales_budget=1000000,
@@ -165,7 +165,7 @@ CHESTER_PRODUCTS = [
         awareness=0.63, accessibility={"Thrift": 0.62},
     ),
     Product(
-        name="Cat", company="Chester", primary_segment="Thrift",
+        name="Coda", company="Crestline", primary_segment="Thrift",
         pfmn=6.2, size=13.8, mtbf=17000,
         revision_date="2025-12-19", age=2.6,
         price=19.00, promo_budget=1050000, sales_budget=800000,
@@ -175,7 +175,7 @@ CHESTER_PRODUCTS = [
         awareness=0.63, accessibility={"Thrift": 0.62},
     ),
     Product(
-        name="Cent", company="Chester", primary_segment="Core",
+        name="Crest", company="Crestline", primary_segment="Core",
         pfmn=8.6, size=11.0, mtbf=18000,
         revision_date="2025-12-03", age=1.2,
         price=27.00, promo_budget=1100000, sales_budget=400000,
@@ -185,7 +185,7 @@ CHESTER_PRODUCTS = [
         awareness=0.71, accessibility={"Core": 0.58},
     ),
     Product(
-        name="City", company="Chester", primary_segment="Core",
+        name="Cove", company="Crestline", primary_segment="Core",
         pfmn=9.3, size=11.5, mtbf=20000,
         revision_date="2025-11-19", age=1.2,
         price=28.00, promo_budget=1050000, sales_budget=600000,
@@ -196,10 +196,10 @@ CHESTER_PRODUCTS = [
     ),
 ]
 
-# --- DIGBY (Broad: all 4 segments) ---
-DIGBY_PRODUCTS = [
+# --- DYNAMO (Broad: all 4 segments) ---
+DYNAMO_PRODUCTS = [
     Product(
-        name="Drum", company="Digby", primary_segment="Thrift",
+        name="Delta", company="Dynamo", primary_segment="Thrift",
         pfmn=5.2, size=14.8, mtbf=14000,
         revision_date="2026-06-28", age=3.5,  # in-progress revision
         price=20.00, promo_budget=1050000, sales_budget=1000000,
@@ -209,7 +209,7 @@ DIGBY_PRODUCTS = [
         awareness=0.52, accessibility={"Thrift": 0.63},
     ),
     Product(
-        name="Daft", company="Digby", primary_segment="Core",
+        name="Dune", company="Dynamo", primary_segment="Core",
         pfmn=7.8, size=12.2, mtbf=16000,
         revision_date="2025-11-30", age=1.2,
         price=22.00, promo_budget=1050000, sales_budget=600000,
@@ -219,7 +219,7 @@ DIGBY_PRODUCTS = [
         awareness=0.52, accessibility={"Core": 0.62},
     ),
     Product(
-        name="Deal", company="Digby", primary_segment="Nano",
+        name="Drift", company="Dynamo", primary_segment="Nano",
         pfmn=9.7, size=8.5, mtbf=18000,
         revision_date="2025-12-22", age=1.1,
         price=31.00, promo_budget=1100000, sales_budget=1300000,
@@ -229,7 +229,7 @@ DIGBY_PRODUCTS = [
         awareness=0.53, accessibility={"Nano": 0.81},
     ),
     Product(
-        name="Dino", company="Digby", primary_segment="Elite",
+        name="Dusk", company="Dynamo", primary_segment="Elite",
         pfmn=11.7, size=10.3, mtbf=20000,
         revision_date="2025-11-05", age=1.1,
         price=35.00, promo_budget=1050000, sales_budget=600000,
@@ -242,10 +242,10 @@ DIGBY_PRODUCTS = [
 
 
 # ============================================================
-# BONDS (from Inquirer R0 Stock & Bond Market Summary)
+# BONDS (from Market Report R0 Stock & Bond Market Summary)
 # ============================================================
 
-ANDREWS_BONDS = [
+APEX_BONDS = [
     Bond(series="13.5S2027", face_value=11_300_000, coupon_rate=0.135,
          year_due=2027, market_close=103.58, yield_to_maturity=0.130),
     Bond(series="11.2S2032", face_value=8_837_000, coupon_rate=0.112,
@@ -254,7 +254,7 @@ ANDREWS_BONDS = [
          year_due=2033, market_close=102.54, yield_to_maturity=0.116),
 ]
 
-BALDWIN_BONDS = [
+BOREALIS_BONDS = [
     Bond(series="13.5S2027", face_value=11_300_000, coupon_rate=0.135,
          year_due=2027, market_close=102.54, yield_to_maturity=0.132),
     Bond(series="11.1S2034", face_value=2_425_572, coupon_rate=0.111,
@@ -263,7 +263,7 @@ BALDWIN_BONDS = [
          year_due=2035, market_close=95.48, yield_to_maturity=0.117),
 ]
 
-CHESTER_BONDS = [
+CRESTLINE_BONDS = [
     Bond(series="13.5S2027", face_value=11_300_000, coupon_rate=0.135,
          year_due=2027, market_close=100.17, yield_to_maturity=0.135),
     Bond(series="11.3S2032", face_value=10_417_600, coupon_rate=0.113,
@@ -276,7 +276,7 @@ CHESTER_BONDS = [
          year_due=2035, market_close=95.19, yield_to_maturity=0.131),
 ]
 
-DIGBY_BONDS = [
+DYNAMO_BONDS = [
     Bond(series="13.5S2027", face_value=11_300_000, coupon_rate=0.135,
          year_due=2027, market_close=100.83, yield_to_maturity=0.134),
     Bond(series="11.2S2032", face_value=8_607_404, coupon_rate=0.112,
@@ -289,13 +289,13 @@ DIGBY_BONDS = [
 
 
 # ============================================================
-# COMPANIES (R0 financial state from Inquirer Annual Reports)
+# COMPANIES (R0 financial state from Market Report Annual Reports)
 # ============================================================
 
-ANDREWS = Company(
-    name="Andrews",
-    products=ANDREWS_PRODUCTS,
-    bonds=ANDREWS_BONDS,
+APEX = Company(
+    name="Apex",
+    products=APEX_PRODUCTS,
+    bonds=APEX_BONDS,
     cash=31_543_000,
     accounts_receivable=13_421_000,
     inventory_value=26_149_000,
@@ -309,6 +309,8 @@ ANDREWS = Company(
     stock_price=95.38,
     dividend_per_share=6.50,
     eps=9.80,
+    eps_history=[9.80],
+    div_history=[6.50],
     market_cap=196_000_000,
     sales_last=163_291_000,
     ebit_last=36_406_000,
@@ -339,10 +341,10 @@ ANDREWS = Company(
     tqm=TQMState(),
 )
 
-BALDWIN = Company(
-    name="Baldwin",
-    products=BALDWIN_PRODUCTS,
-    bonds=BALDWIN_BONDS,
+BOREALIS = Company(
+    name="Borealis",
+    products=BOREALIS_PRODUCTS,
+    bonds=BOREALIS_BONDS,
     cash=19_378_000,
     accounts_receivable=9_824_000,
     inventory_value=14_997_000,
@@ -356,6 +358,8 @@ BALDWIN = Company(
     stock_price=55.73,
     dividend_per_share=2.37,
     eps=5.79,
+    eps_history=[5.79],
+    div_history=[2.37],
     market_cap=106_000_000,
     sales_last=119_521_000,
     ebit_last=21_589_000,
@@ -380,10 +384,10 @@ BALDWIN = Company(
     ),
 )
 
-CHESTER = Company(
-    name="Chester",
-    products=CHESTER_PRODUCTS,
-    bonds=CHESTER_BONDS,
+CRESTLINE = Company(
+    name="Crestline",
+    products=CRESTLINE_PRODUCTS,
+    bonds=CRESTLINE_BONDS,
     cash=31_960_000,
     accounts_receivable=10_809_000,
     inventory_value=10_603_000,
@@ -392,11 +396,13 @@ CHESTER = Company(
     accounts_payable=7_459_000,
     current_debt=29_231_000,
     common_stock=29_958_000,
-    retained_earnings=24_514_000,  # was 54.648M — corrected so A=L+E balances (OCR jumbled RE); BV/sh $21.22 ≈ Inquirer $21.29
+    retained_earnings=24_514_000,  # was 54.648M — corrected so A=L+E balances (OCR jumbled RE); BV/sh $21.22 ≈ Market Report $21.29
     shares_outstanding=2_566_964,
     stock_price=44.50,
     dividend_per_share=4.93,
     eps=2.91,
+    eps_history=[2.91],
+    div_history=[4.93],
     market_cap=114_000_000,
     sales_last=131_510_000,
     ebit_last=21_673_000,
@@ -421,10 +427,10 @@ CHESTER = Company(
     ),
 )
 
-DIGBY = Company(
-    name="Digby",
-    products=DIGBY_PRODUCTS,
-    bonds=DIGBY_BONDS,
+DYNAMO = Company(
+    name="Dynamo",
+    products=DYNAMO_PRODUCTS,
+    bonds=DYNAMO_BONDS,
     cash=32_632_000,
     accounts_receivable=9_773_000,
     inventory_value=6_437_000,
@@ -433,11 +439,13 @@ DIGBY = Company(
     accounts_payable=10_205_000,
     current_debt=25_558_000,
     common_stock=14_328_000,
-    retained_earnings=36_060_000,  # was 53.243M — corrected so A=L+E balances (OCR jumbled RE); BV/sh $23.21 (Inquirer $24.52)
+    retained_earnings=36_060_000,  # was 53.243M — corrected so A=L+E balances (OCR jumbled RE); BV/sh $23.21 (Market Report $24.52)
     shares_outstanding=2_171_290,
     stock_price=53.17,
     dividend_per_share=2.84,
     eps=4.70,
+    eps_history=[4.70],
+    div_history=[2.84],
     market_cap=115_000_000,
     sales_last=118_899_000,
     ebit_last=23_774_000,
@@ -485,10 +493,10 @@ def build_r0_state() -> GameState:
         prime_interest_rate=0.08,
         segments=[s.model_copy(deep=True) for s in SEGMENTS],
         companies=[
-            ANDREWS.model_copy(deep=True),
-            BALDWIN.model_copy(deep=True),
-            CHESTER.model_copy(deep=True),
-            DIGBY.model_copy(deep=True),
+            APEX.model_copy(deep=True),
+            BOREALIS.model_copy(deep=True),
+            CRESTLINE.model_copy(deep=True),
+            DYNAMO.model_copy(deep=True),
         ],
         industry_unit_demand=R0_INDUSTRY_DEMAND.copy(),
         industry_unit_sold=R0_INDUSTRY_SOLD.copy(),
@@ -500,9 +508,9 @@ if __name__ == "__main__":
     state = build_r0_state()
     print(f"R0 State: Round {state.round_num}, Year {state.year}")
     print(f"Companies: {[c.name for c in state.companies]}")
-    print(f"Andrews products: {[p.name for p in state.get_company('Andrews').products]}")
-    print(f"Andrews Cash: ${state.get_company('Andrews').cash/1e6:.1f}M")
-    print(f"Andrews Stock: ${state.get_company('Andrews').stock_price:.2f}")
+    print(f"Apex products: {[p.name for p in state.get_company('Apex').products]}")
+    print(f"Apex Cash: ${state.get_company('Apex').cash/1e6:.1f}M")
+    print(f"Apex Stock: ${state.get_company('Apex').stock_price:.2f}")
     print(f"Total industry demand: {sum(state.industry_unit_demand.values())} units")
     for seg in state.segments:
         print(f"  {seg.name}: center ({seg.center_pfmn},{seg.center_size}) "

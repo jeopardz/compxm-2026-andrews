@@ -1,5 +1,5 @@
 """
-Integration test: Andrews R1-R4 full playthrough.
+Integration test: Apex R1-R4 full playthrough.
 
 Validates that the simulator can run a full 4-round game without crashes,
 with reasonable directional results (positive profit, no negative cash, etc.).
@@ -13,11 +13,11 @@ from sim.engines.bsc import compute_cumulative_bsc
 
 
 def make_round_decision(state, round_num: int) -> RoundDecision:
-    """Generate sensible decisions for Andrews per round."""
-    andrews = state.get_company("Andrews")
+    """Generate sensible decisions for Apex per round."""
+    apex = state.get_company("Apex")
     product_decisions = []
 
-    for p in andrews.products:
+    for p in apex.products:
         seg = state.get_segment(p.primary_segment)
         # Revise to next year's ideal
         future_pfmn = seg.center_pfmn + seg.drift_pfmn + seg.ideal_offset_pfmn
@@ -70,27 +70,27 @@ def test_r1_r4_full_playthrough():
         assert result["round_num"] == r, f"Round number mismatch at R{r}"
         bsc_results.append(result["bsc"])
 
-        andrews = state.get_company("Andrews")
+        apex = state.get_company("Apex")
         # Sanity checks
-        assert andrews.cash >= -50_000_000, f"R{r}: Cash way negative ${andrews.cash/1e6:.1f}M"
-        assert andrews.stock_price >= 1.0, f"R{r}: Stock price collapsed to ${andrews.stock_price}"
-        assert andrews.profit_last > -50_000_000, f"R{r}: Profit way negative ${andrews.profit_last/1e6:.1f}M"
-        assert andrews.shares_outstanding > 0, f"R{r}: Shares outstanding is 0"
-        assert len(andrews.products) == 4, f"R{r}: Products count changed"
+        assert apex.cash >= -50_000_000, f"R{r}: Cash way negative ${apex.cash/1e6:.1f}M"
+        assert apex.stock_price >= 1.0, f"R{r}: Stock price collapsed to ${apex.stock_price}"
+        assert apex.profit_last > -50_000_000, f"R{r}: Profit way negative ${apex.profit_last/1e6:.1f}M"
+        assert apex.shares_outstanding > 0, f"R{r}: Shares outstanding is 0"
+        assert len(apex.products) == 4, f"R{r}: Products count changed"
 
-        print(f"\nR{r}: Stock ${andrews.stock_price:.2f}, Profit ${andrews.profit_last/1e6:.1f}M, "
-              f"Cash ${andrews.cash/1e6:.1f}M, BSC {result['bsc']['total']:.1f}")
+        print(f"\nR{r}: Stock ${apex.stock_price:.2f}, Profit ${apex.profit_last/1e6:.1f}M, "
+              f"Cash ${apex.cash/1e6:.1f}M, BSC {result['bsc']['total']:.1f}")
 
     # Final state checks
     assert state.round_num == 4
     assert state.year == 2029
-    final_andrews = state.get_company("Andrews")
-    assert final_andrews.cumulative_profit > 0, f"Cumulative profit negative: ${final_andrews.cumulative_profit/1e6:.1f}M"
-    assert final_andrews.tqm.total_expenditures > 10_000_000, "TQM under-invested"
-    assert final_andrews.hr.productivity_index >= 1.0, "HR PI didn't improve"
+    final_apex = state.get_company("Apex")
+    assert final_apex.cumulative_profit > 0, f"Cumulative profit negative: ${final_apex.cumulative_profit/1e6:.1f}M"
+    assert final_apex.tqm.total_expenditures > 10_000_000, "TQM under-invested"
+    assert final_apex.hr.productivity_index >= 1.0, "HR PI didn't improve"
 
     # Cumulative BSC
-    cum_bsc = compute_cumulative_bsc(bsc_results, state, "Andrews")
+    cum_bsc = compute_cumulative_bsc(bsc_results, state, "Apex")
     print(f"\n=== FINAL CUMULATIVE BSC ===")
     print(f"  Financial: {cum_bsc.financial:.1f}")
     print(f"  Internal Bus: {cum_bsc.internal_business:.1f}")
@@ -113,7 +113,7 @@ def test_history_records_each_round():
 def test_ai_competitors_make_decisions():
     """Verify AI competitors actually do things (revise, spend on HR/TQM)."""
     state = build_r0_state()
-    initial_baldwin_age = state.get_company("Baldwin").products[0].age
+    initial_borealis_age = state.get_company("Borealis").products[0].age
 
     d = make_round_decision(state, 1)
     advance_round(state, d, prev_state=state.model_copy(deep=True))
@@ -126,7 +126,7 @@ def test_ai_competitors_make_decisions():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("INTEGRATION TEST: Andrews R1-R4 Full Playthrough")
+    print("INTEGRATION TEST: Apex R1-R4 Full Playthrough")
     print("=" * 60)
     test_r1_r4_full_playthrough()
     print("\n[OK] All integration tests passed")
