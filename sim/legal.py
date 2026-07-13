@@ -40,11 +40,11 @@ def render_legal_links() -> None:
 
 def _contact_block() -> None:
     email = support_email()
-    if email:
+    if email and not email.lower().endswith((".example", ".invalid", ".local")):
         safe = escape(email, quote=True)
         st.markdown(f'Contact: <a href="mailto:{safe}">{safe}</a>', unsafe_allow_html=True)
     else:
-        st.warning("Support contact is not configured yet. Set SUPPORT_EMAIL before public launch.")
+        st.warning("Temporary support placeholder only. Set a working SUPPORT_EMAIL before public launch.")
 
 
 def _privacy() -> None:
