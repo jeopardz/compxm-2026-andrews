@@ -1,10 +1,10 @@
 """
 Balanced Scorecard scoring engine.
 
-Per BizSim Balanced Scorecard (4 perspectives, ~125 pts each per round
+Per CompMastery Balanced Scorecard (4 perspectives, ~125 pts each per round
 + 500 pts cumulative final = 1000 total):
 
-Standard per-round BSC (BizSim calibration):
+Standard per-round BSC (CompMastery calibration):
 
 FINANCIAL (per round):
   - Stock Price: 8 pts (target: increase)
@@ -38,7 +38,7 @@ FINAL CUMULATIVE (500 pts):
   - Asset Turnover trend (40 pts)
   - Etc.
 
-NOTE: BizSim BSC weights are simulation-specific approximations.
+NOTE: CompMastery BSC weights are simulation-specific approximations.
 """
 from __future__ import annotations
 from typing import Dict, List
@@ -85,7 +85,7 @@ RECAP_RAW_MAX = 500.0
 
 
 def stock_price_score(current: float, last_round: float, max_pts: int = 8) -> float:
-    """Absolute stock price (BizSim threshold): full at >=$80, partial $40-80, low below."""
+    """Absolute stock price (CompMastery threshold): full at >=$80, partial $40-80, low below."""
     if current >= 80:
         return float(max_pts)
     if current >= 40:
@@ -94,7 +94,7 @@ def stock_price_score(current: float, last_round: float, max_pts: int = 8) -> fl
 
 
 def profit_score(profit_m: float, max_pts: int = 9) -> float:
-    """Profit score: full at $7M+/round (BizSim threshold), scaled below."""
+    """Profit score: full at $7M+/round (CompMastery threshold), scaled below."""
     return min(max_pts, max(0, profit_m / 7.0 * max_pts))
 
 
@@ -108,7 +108,7 @@ def leverage_score(lev: float, max_pts: int = 8) -> float:
 
 
 def contribution_margin_score(cm_pct: float, max_pts: int = 5) -> float:
-    """Full at 36%+ (BizSim target), partial 30-36%, scaled below."""
+    """Full at 36%+ (CompMastery target), partial 30-36%, scaled below."""
     if cm_pct >= 0.36:
         return float(max_pts)
     if cm_pct >= 0.30:
@@ -117,7 +117,7 @@ def contribution_margin_score(cm_pct: float, max_pts: int = 5) -> float:
 
 
 def plant_util_score(util_pct: float, max_pts: int = 5) -> float:
-    """BizSim: 150-200% is IDEAL (2nd shift used efficiently), 100-150% partial,
+    """CompMastery: 150-200% is IDEAL (2nd shift used efficiently), 100-150% partial,
     <100% wasted capacity, >200% impossible/penalized. (Was penalizing 150%+, which
     is exactly the good behavior — Apex R0 ran Atlas at 188%.)"""
     if 150 <= util_pct <= 200:
@@ -162,7 +162,7 @@ def product_count_score(active_products: int, max_pts: int = 5) -> float:
 
 
 def sga_score(sga_pct: float, max_pts: int = 5) -> float:
-    """BizSim: SG&A/Sales <=12% = full, scaling down above that."""
+    """CompMastery: SG&A/Sales <=12% = full, scaling down above that."""
     if sga_pct <= 0.12:
         return float(max_pts)
     return max(0, max_pts * (1 - (sga_pct - 0.12) / 0.13))  # 0 at 25%
@@ -182,7 +182,7 @@ def productivity_score(pi: float, max_pts: int = 7) -> float:
 
 
 def turnover_score(turnover_rate: float, max_pts: int = 6) -> float:
-    """BizSim: turnover <=7% = full, scaling down to 0 at ~12%."""
+    """CompMastery: turnover <=7% = full, scaling down to 0 at ~12%."""
     if turnover_rate <= 0.07:
         return float(max_pts)
     return max(0, max_pts * (1 - (turnover_rate - 0.07) / 0.05))
@@ -214,7 +214,7 @@ def compute_round_bsc(state: GameState, company_name: str = "Apex",
     cm_pct = c.contribution_margin_last / max(1, c.sales_last)
     fin_cm = contribution_margin_score(cm_pct)
     financial = fin_stock + fin_profit + fin_lev + fin_cm
-    # Emergency loan = severe penalty (BizSim: -50 to -100 pts of 1000; here the
+    # Emergency loan = severe penalty (CompMastery: -50 to -100 pts of 1000; here the
     # per-round financial max is ~30, so scale a heavy deduction). Missing before.
     emergency_penalty = 0.0
     if c.emergency_loan > 10_000_000:

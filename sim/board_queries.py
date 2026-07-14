@@ -1,5 +1,5 @@
 """
-Board Queries — BizSim 2026 Style Multiple-Choice Questions.
+Board Queries — CompMastery 2026 Style Multiple-Choice Questions.
 
 Five sets (one per round, Round 5 = final cumulative).
 Total = 30 questions covering business simulation topics:
@@ -59,13 +59,13 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         ),
         options=[
             "0.58 — highly conservative, almost no debt",
-            "1.74 — moderate use of debt, near BizSim's BSC sweet spot of 1.8-2.8",
+            "1.74 — moderate use of debt, near CompMastery's BSC sweet spot of 1.8-2.8",
             "2.40 — over-leveraged, risk of S&P downgrade",
             "1.00 — perfectly balanced, no debt at all",
         ],
         correct_index=1,
         explanation=(
-            "Leverage = Assets / Equity = 123.5 / 71.1 = 1.74. The BizSim "
+            "Leverage = Assets / Equity = 123.5 / 71.1 = 1.74. The CompMastery "
             "BSC awards full points for leverage between 1.8 and 2.8 — "
             "Apex is just below that band, leaving room to issue debt "
             "without S&P concern."
@@ -166,7 +166,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         correct_index=0,
         explanation=(
             "P/E = Price / EPS = $95.38 / $9.80 = 9.74. A single-digit P/E "
-            "in BizSim signals investors expect modest growth — typical "
+            "in CompMastery signals investors expect modest growth — typical "
             "for industrial sensors. Driving EPS up while maintaining P/E "
             "is the main lever for stock-price growth (BSC reward)."
         ),
@@ -340,7 +340,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         round_num=3,
         question=(
             "Apex's Arc (Nano segment) needs a revision moving pfmn from "
-            "8.0 to 9.2 and size from 12.0 to 10.8. BizSim's R&D formula "
+            "8.0 to 9.2 and size from 12.0 to 10.8. CompMastery's R&D formula "
             "(simplified): days = max(45, 175 x distance), before automation/concurrency. Distance ~= 1.7. "
             "Roughly how long does R&D take, and should you start NOW?"
         ),
@@ -377,7 +377,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         correct_index=0,
         explanation=(
             "WC = ($31.5 + $13.4 + $26.1) - $16.0 = $55.0M. A healthy "
-            "buffer. BizSim rewards a current ratio in the 2-4x range; "
+            "buffer. CompMastery rewards a current ratio in the 2-4x range; "
             "Apex is ~4.4x — slightly cash-heavy. Could pay a special "
             "dividend, retire the 13.5% bond early, or fund capacity."
         ),
@@ -572,7 +572,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         ],
         correct_index=1,
         explanation=(
-            "BizSim Final BSC heavily weights R5-specific scores — "
+            "CompMastery Final BSC heavily weights R5-specific scores — "
             "stock price, ROE, ROS, market share, contribution margin, "
             "plant utilization, employee productivity, customer survey. "
             "A poor R5 can wipe out earlier lead. Treat R5 like the "
@@ -594,7 +594,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         options=["13.9%", "23.6%", "30.4%", "45.8%"],
         correct_index=2,
         explanation=(
-            "ROE = Net Profit / Equity = $34M / $112M = 30.4%. BizSim "
+            "ROE = Net Profit / Equity = $34M / $112M = 30.4%. CompMastery "
             "BSC awards full ROE points for >18% in the final year. "
             "Apex crushed it."
         ),
@@ -635,7 +635,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
             "Apex delivered the best mix of EPS growth, dividend "
             "discipline, and leverage; Crestline's slide reflects weak "
             "margins compounding for 5 years",
-            "Stock prices are random in BizSim",
+            "Stock prices are random in CompMastery",
             "Borealis is undervalued — bigger market cap than Apex",
             "Crestline won because lowest stock price means cheapest entry",
         ],
@@ -665,7 +665,7 @@ BOARD_QUERIES: List[BoardQueryQuestion] = [
         ],
         correct_index=1,
         explanation=(
-            "BizSim grading: 600-700 average, 700-780 top quartile, "
+            "CompMastery grading: 600-700 average, 700-780 top quartile, "
             "780+ elite. 742 is a clear top-quartile finish — strong "
             "execution. Drill into the lowest-scoring perspective "
             "(usually Internal Business or Learning & Growth) for "

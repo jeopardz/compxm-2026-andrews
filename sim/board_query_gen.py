@@ -1,7 +1,7 @@
 """
 Personalized Board-Query generator.
 
-BizSim's Board-Query mechanic gives every player the same topics, but
+CompMastery's Board-Query mechanic gives every player the same topics, but
 the numbers in each question are generated from THAT player's own simulation results,
 and the correct answer is whatever their own company's data implies. This module
 reproduces that — it reads a live GameState and emits `BoardQueryQuestion` objects

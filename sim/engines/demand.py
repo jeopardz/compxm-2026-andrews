@@ -1,7 +1,7 @@
 """
 Demand allocation + Segment drift engine.
 
-Per BizSim:
+Per CompMastery:
   1. Each segment's center drifts by (drift_pfmn, drift_size) per year
      (segments move toward smaller + faster every year)
   2. Total segment demand grows by `growth_rate` per year
@@ -11,7 +11,7 @@ Per BizSim:
      but primary segment gets the strongest match
   5. Stockouts: if a product runs out, demand spills to next-best alternative
 
-Reference: BizSim customer-buying criteria model
+Reference: CompMastery customer-buying criteria model
 """
 from __future__ import annotations
 from typing import Dict, List, Tuple

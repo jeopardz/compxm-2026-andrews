@@ -1,7 +1,7 @@
 """
 AI Competitor decision logic for Borealis, Crestline, Dynamo.
 
-Strategies (per BizSim computer-company strategy model):
+Strategies (per CompMastery computer-company strategy model):
   - Borealis: Niche Differentiator (High Tech: Nano + Elite focus)
   - Crestline: Niche Cost Leader (Low Tech: Thrift + Core focus)
   - Dynamo: Broad Differentiator (all 4 segments)
@@ -167,7 +167,7 @@ def _generate_decisions(state: GameState, company_name: str) -> RoundDecision:
         forecast = max(int(p.units_sold_last * (1 + seg_growth * 0.5)), 100)
         decision.forecast = forecast
 
-        # Production: use BizSim playbook formula = (forecast - inventory) × 1.05
+        # Production: use CompMastery playbook formula = (forecast - inventory) × 1.05
         # This is the SAME formula UI defaults to — avoids overproduction that
         # was killing AI profitability via wasted material/labor + inventory carry
         target_demand = int(p.units_sold_last * (1 + seg.growth_rate))

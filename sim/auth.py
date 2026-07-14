@@ -22,7 +22,7 @@ import streamlit as st
 #
 # Rewritten on a normal render after sign-in so the cookie component can flush.
 _PERSIST_LOGIN = True
-_COOKIE_KEY = "bizsim_sb_refresh"
+_COOKIE_KEY = "compmastery_sb_refresh"
 _COOKIE_DAYS = 30
 
 
@@ -75,7 +75,7 @@ def init_cookies() -> None:
         return
     try:
         import extra_streamlit_components as stx
-        st.session_state["_cookie_mgr"] = stx.CookieManager(key="bizsim_cookies")
+        st.session_state["_cookie_mgr"] = stx.CookieManager(key="compmastery_cookies")
     except Exception:
         st.session_state["_cookie_mgr"] = None
 
@@ -227,8 +227,8 @@ def sign_out() -> None:
 def render_login_page() -> None:
     """Render the sign-in / sign-up / reset UI. Call require_login() instead of
     this directly unless you need custom placement."""
-    st.title("BizSim")
-    st.subheader("Practice business strategy in four focused rounds")
+    st.title("CompMastery")
+    st.subheader("Competitive business simulation in four focused rounds")
     st.markdown(
         "- Make product, marketing, operations, people and finance decisions\n"
         "- Play validated scenarios across three difficulty levels\n"

@@ -1,1 +1,1 @@
-"""BizSim market and annual report generators."""
+"""CompMastery market and annual report generators."""

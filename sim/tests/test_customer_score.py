@@ -35,7 +35,7 @@ class TestPriceScore:
         assert price_score(thrift.price_min, thrift) == pytest.approx(100.0, abs=0.01)
 
     def test_price_below_floor_is_max(self, state):
-        # BizSim: pricing AT or BELOW the floor = max price appeal (you lose margin,
+        # CompMastery: pricing AT or BELOW the floor = max price appeal (you lose margin,
         # not demand). Previously this wrongly returned 0 (Atlas-at-$13 bug).
         thrift = state.get_segment("Thrift")  # range 14-26
         assert price_score(13.99, thrift) == pytest.approx(100.0)

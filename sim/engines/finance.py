@@ -1,7 +1,7 @@
 """
 Finance engine — Income Statement, Balance Sheet, Cash Flow, Bonds.
 
-Per BizSim:
+Per CompMastery:
   - Income tax = 35% flat
   - Profit sharing = 2% of net profit (after tax)
   - Bond: 10-year term, 5% brokerage fee on issuance
@@ -83,7 +83,7 @@ def calculate_credit_rating(leverage: float) -> str:
     """
     Credit rating from leverage (Assets/Equity), calibrated so the real R0 companies
     get their actual Market Report S&P: Apex 1.74=BB, Borealis 1.90=BB, Crestline 2.66=B,
-    Dynamo 2.53=B. BizSim weights debt heavily, so ratings drop faster than a naive
+    Dynamo 2.53=B. CompMastery weights debt heavily, so ratings drop faster than a naive
     "AAA at 1.0" ladder (which wrongly gave every R0 company an 'A').
     """
     if leverage <= 1.0: return "AAA"
@@ -228,7 +228,7 @@ def issue_stock(company: Company, amount: float, current_price: Optional[float] 
 
 def buyback_stock(company: Company, amount: float, current_price: Optional[float] = None) -> Dict:
     """Buy back shares at current market price. Reduces shares and equity.
-    BizSim caps buyback at 5% of shares outstanding per round; also never lets
+    CompMastery caps buyback at 5% of shares outstanding per round; also never lets
     shares go negative. (Was unclamped — a huge buyback drove shares_outstanding
     massively negative and triggered a bogus multi-billion emergency loan.)"""
     if current_price is None:
@@ -276,7 +276,7 @@ def update_stock_price(company: Company) -> float:
     Stock price = Book Value/share + 5×(2-yr avg EPS) + 2×(2-yr avg Dividend),
     then an emergency-loan liquidity penalty.
 
-    BizSim drives price off book value + the LAST TWO YEARS' EPS and dividend (not
+    CompMastery drives price off book value + the LAST TWO YEARS' EPS and dividend (not
     just the current year), which smooths one-off swings. We keep the EPS-heavy
     weights (5×EPS, 2×Div — investors reward earnings over payout) that calibrate
     Apex R0 to ≈$95.38 (BV $34.65 + 5×$9.80 + 2×$6.50 = $96.65).
@@ -371,7 +371,7 @@ def income_statement(company: Company, year: int, prime_rate: float,
     #
     # The seed/realized labor cost per unit already reflects the round's shift blend,
     # so no separate 2nd-shift premium here — overproduction is penalized via inventory
-    # carrying cost (below) + the BSC plant-utilization score, matching BizSim's IS.
+    # carrying cost (below) + the BSC plant-utilization score, matching CompMastery's IS.
     var_labor = 0.0
     var_material = 0.0
     for p in company.products:

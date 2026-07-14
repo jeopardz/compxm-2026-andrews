@@ -7,7 +7,7 @@ import os
 import streamlit as st
 
 
-LOGGER = logging.getLogger("bizsim")
+LOGGER = logging.getLogger("compmastery")
 
 
 def _setting(key: str, default: str = "") -> str:

@@ -1,7 +1,7 @@
 """
 Customer Survey Score engine.
 
-BizSim scoring model (whole-score multiplier form):
+CompMastery scoring model (whole-score multiplier form):
 
   base (0-100)  = Σ criterion_fit × criterion_weight        # in-band appeal only
   net           = base
@@ -20,7 +20,7 @@ sub-score, so out-of-band products stayed far too competitive.
 For each segment, customers weight 4 criteria: Price, Age, MTBF (reliability),
 Position (distance from the segment ideal spot).
 
-Reference: BizSim customer-survey scoring specification §4.4-4.6.
+Reference: CompMastery customer-survey scoring specification §4.4-4.6.
 """
 from __future__ import annotations
 from math import sqrt

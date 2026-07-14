@@ -1,4 +1,4 @@
-"""Normalize pre-rebrand game snapshots to the current BizSim names.
+"""Normalize pre-rebrand game snapshots to the current CompMastery names.
 
 The simulator has a fixed four-company/four-product board.  Older local saves
 and development database snapshots can therefore be upgraded safely by company

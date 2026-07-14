@@ -1,4 +1,4 @@
--- BizSim SaaS security and consistency hardening.
+-- CompMastery SaaS security and consistency hardening.
 alter table public.profiles add column if not exists demo_game_consumed boolean not null default false;
 alter table public.games add column if not exists board_queries jsonb not null default '{}';
 

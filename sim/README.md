@@ -1,6 +1,6 @@
-# BizSim
+# CompMastery
 
-BizSim is an interactive business-strategy simulator. The player manages Apex
+CompMastery is an interactive business-strategy simulator. The player manages Apex
 across four decision rounds while competing against three computer-controlled
 companies: Borealis, Crestline, and Dynamo.
 
@@ -103,8 +103,8 @@ python -m sim.tests.test_integration_4round
 
 ## Model limitations
 
-BizSim is an educational decision model rather than a forecast of real company
+CompMastery is an educational decision model rather than a forecast of real company
 performance. Several equations, competitor strategies, market events, and
 Balanced Scorecard weights are intentionally simplified or approximated. Use
-results to compare strategies inside BizSim, not as financial advice or as a
+results to compare strategies inside CompMastery, not as financial advice or as a
 guarantee of outcomes in another simulation.

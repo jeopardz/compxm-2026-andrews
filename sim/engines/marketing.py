@@ -1,7 +1,7 @@
 """
 Marketing engine.
 
-Per BizSim classic marketing model (no advanced marketing module):
+Per CompMastery classic marketing model (no advanced marketing module):
   Promo Budget → Awareness (per-product)
     $1.4M = maintain (zero growth)
     $2.0M = grow
@@ -14,7 +14,7 @@ Per BizSim classic marketing model (no advanced marketing module):
     Accessibility DECAYS by ~33% per year if no spend
 
 Reference:
-  BizSim promotion and sales-budget reference model
+  CompMastery promotion and sales-budget reference model
 """
 from __future__ import annotations
 from typing import Dict, List

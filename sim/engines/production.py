@@ -1,13 +1,13 @@
 """
 Production engine.
 
-BIZSIM UNIT CONVENTION (IMPORTANT):
+COMPMASTERY UNIT CONVENTION (IMPORTANT):
   - `units`, `capacity`, `inventory`, `production_schedule` are integers in THOUSANDS of units.
     e.g., capacity_first_shift=1130 means 1,130,000 units of capacity.
   - `price`, `material_cost`, `labor_cost` are in DOLLARS per ACTUAL unit.
   - Revenue = units(thousands) * price($/unit) = $thousands -> multiply by 1000 for full $.
 
-Per BizSim:
+Per CompMastery:
   - Plant capacity cost = $6 (base) + $4 × automation_level per 1000-unit of 1st-shift cap.
     For 1130 capacity (1.13M units): cost = 1130 × ($6 + $4×6) × 1000 = $33.9M
   - 1st shift labor = base labor cost × productivity_index
@@ -82,7 +82,7 @@ def capacity_purchase_cost(units_thousands: int, automation: float) -> float:
 def automation_upgrade_cost(units_thousands: int, old_auto: float, new_auto: float) -> float:
     """Cost in DOLLARS to change automation from old to new level.
 
-    BizSim charges the $4/point/unit retooling cost for changes in either
+    CompMastery charges the $4/point/unit retooling cost for changes in either
     direction — lowering automation is a real (retooling) expense too, not free.
     (Was: return 0 for downgrades, which let a company drop automation for faster
     R&D at no cost — not authentic.)

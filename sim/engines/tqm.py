@@ -1,7 +1,7 @@
 """
 TQM engine — 10 initiatives, S-curve response, cap $2M/initiative/round, $4M cumulative.
 
-Per BizSim TQM model:
+Per CompMastery TQM model:
   Process Management initiatives:
     - CPI Systems (Continuous Process Improvement) -> material -3% to -5%
     - Vendor/JIT -> material -3% to -5%
@@ -26,7 +26,7 @@ Per BizSim TQM model:
   S-curve: $0 = no impact, $1M = ~half impact, $2M = ~full impact per round
            $4M cumulative cap per initiative
 
-Reference: BizSim TQM model
+Reference: CompMastery TQM model
 """
 from __future__ import annotations
 from typing import Dict
@@ -35,7 +35,7 @@ from sim.data_models import Company, TQMState
 
 # Per-initiative max impact (full effect at $4M cumulative)
 TQM_IMPACTS = {
-    # Initiative → effect mapping follows the BizSim specification §7.1:
+    # Initiative → effect mapping follows the CompMastery specification §7.1:
     #   UNEP Green   = ↑Demand + ↓Material (was: ↓Admin — wrong lever entirely)
     #   Benchmarking = ↓Admin ONLY         (was: also ↓R&D cycle — that belongs to QFD)
     #   QFD Effort   = ↓R&D cycle + ↑Demand (was: ↑Demand only — missing its cycle-time cut)
@@ -113,7 +113,7 @@ def update_tqm(company: Company, spend_per_initiative: Dict[str, float]) -> Dict
         adm += impacts["admin"] * factor
         dem += impacts["demand"] * factor
 
-    # Cap at BizSim maximums
+    # Cap at CompMastery maximums
     tqm.material_cost_reduction = max(-0.118, mat)
     tqm.labor_cost_reduction = max(-0.14, lab)
     tqm.rd_cycle_time_reduction = max(-0.40, rd)

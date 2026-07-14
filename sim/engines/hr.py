@@ -1,7 +1,7 @@
 """
-HR engine — BizSim version (3 decisions per company per round).
+HR engine — CompMastery version (3 decisions per company per round).
 
-Per BizSim HR model:
+Per CompMastery HR model:
   - Workforce Complement: Total employees needed (entered on Production page)
     Each unit of production needs ~0.0007 employees (approximate)
   - Recruit Spend: $0-$5,000 per new employee above auto $1,000
@@ -13,7 +13,7 @@ Per BizSim HR model:
   - Turnover Rate: 10% default, drops to ~5% with high training
   - Annual Raise: ~5% in labor contract (default)
 
-Reference: BizSim HR model
+Reference: CompMastery HR model
 """
 from __future__ import annotations
 from typing import Dict
@@ -69,7 +69,7 @@ def training_cost(complement: int, training_hours: int) -> float:
 
 def separation_cost(separated_employees: int) -> float:
     """Cost to lay off employees: 0 for natural turnover."""
-    return 0.0  # BizSim has separation cost only for forced layoffs (not modeled)
+    return 0.0  # CompMastery has separation cost only for forced layoffs (not modeled)
 
 
 def labor_wages_total(complement: int) -> float:

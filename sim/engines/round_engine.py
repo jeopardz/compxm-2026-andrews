@@ -1,5 +1,5 @@
 """
-Round Advancement Engine — orchestrates one round of BizSim simulation.
+Round Advancement Engine — orchestrates one round of CompMastery simulation.
 
 Sequence per round:
   1. Apply Apex decisions (R&D, Marketing, Production, Finance, HR, TQM)
@@ -104,7 +104,7 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
                          concurrent_projects=_concurrent)
 
         # Pricing — floor at $0 so a negative price can't create negative revenue
-        # (BizSim rejects prices outside the band; at minimum never go below 0)
+        # (CompMastery rejects prices outside the band; at minimum never go below 0)
         if pdec.price is not None:
             p.price = max(0.0, pdec.price)
 
@@ -152,7 +152,7 @@ def apply_company_decisions(company: Company, decisions: RoundDecision,
                 p.capacity_first_shift = max(0, p.capacity_first_shift - sell_units)
 
         # Automation change (EITHER direction) — RESCALE labor_cost so new automation
-        # actually changes labor. BizSim charges the $4/point/unit retooling cost for
+        # actually changes labor. CompMastery charges the $4/point/unit retooling cost for
         # both raising AND lowering automation; lowering also raises labor cost back up.
         # (Was: only handled upgrades, so a downgrade for faster R&D was free AND kept
         # the old low labor cost — doubly unauthentic.)
@@ -271,7 +271,7 @@ def advance_round(state: GameState, apex_decisions: RoundDecision,
     Run one full round: apply decisions, simulate, compute reports.
     Returns dict with round results + BSC.
     """
-    # BizSim is a fixed 4-round competition — never simulate a 5th round.
+    # CompMastery is a fixed 4-round competition — never simulate a 5th round.
     if state.round_num >= 4:
         raise ValueError("Game is complete (R4 already played). Reset to play again.")
 
@@ -314,7 +314,7 @@ def advance_round(state: GameState, apex_decisions: RoundDecision,
         update_accessibility(state.companies, seg.name, sales_per_product)
 
     # 2.7 Advance market + products to END-OF-YEAR *before* scoring/selling.
-    # BIZSIM TIMING FIX (was off-by-one): the December customer survey is scored
+    # COMPMASTERY TIMING FIX (was off-by-one): the December customer survey is scored
     # against the year's ENDING segment positions, and a product revised this year
     # sells at its NEW position for the rest of the year. So we must:
     #   (a) grow industry demand to this year's level,
@@ -405,7 +405,7 @@ def advance_round(state: GameState, apex_decisions: RoundDecision,
         delta_inv = new_inv - old_inv
         c.cash += c.profit_last + depreciation - delta_ar - delta_inv + delta_ap
 
-        # === Repay current debt (BizSim: short-term debt due annually) ===
+        # === Repay current debt (CompMastery: short-term debt due annually) ===
         # Then re-borrow if user requested new current_debt_borrow
         # A bond that matured moments ago rolls into a one-year note and is not due
         # until next round. Only opening current debt is repaid now.
@@ -433,7 +433,7 @@ def advance_round(state: GameState, apex_decisions: RoundDecision,
         summary["financials"][c.name] = is_dict
 
     # 5. (Market advance, R&D completion, aging, and bond maturity already happened
-    #     in step 2.7 — before the sale — per the BizSim timing fix.)
+    #     in step 2.7 — before the sale — per the CompMastery timing fix.)
     state.round_num += 1
     state.year += 1
 

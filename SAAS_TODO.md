@@ -1,4 +1,4 @@
-# BizSim SaaS status
+# CompMastery SaaS status
 
 The application, authentication, persistence, demo gate, payment webhook, scenario
 pool and Railway configuration are implemented. Remediation is tracked in

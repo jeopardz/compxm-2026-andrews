@@ -1,6 +1,6 @@
 """Tests for the personalized board-query generator.
 
-Guarantees the BizSim "numbers from your simulation" mechanic: every generated question's
+Guarantees the CompMastery "numbers from your simulation" mechanic: every generated question's
 correct answer is computed from the same engine that runs the game, so a player who
 reads their own reports correctly can always answer — and a perfect answer key grades
 to 100%.

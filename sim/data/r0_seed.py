@@ -1,8 +1,8 @@
 """
-R0 (Dec 31, 2025) starting state for BizSim 2026 Apex simulation.
+R0 (Dec 31, 2025) starting state for CompMastery 2026 Apex simulation.
 Data sourced from:
-  - BizSim Industry Conditions Report 2026 (segments, drift, growth, buying criteria)
-  - BizSim Market Report Report 2026 R0 (companies, products, financials, bonds)
+  - CompMastery Industry Conditions Report 2026 (segments, drift, growth, buying criteria)
+  - CompMastery Market Report Report 2026 R0 (companies, products, financials, bonds)
 """
 from sim.data_models import (
     Segment, Product, Company, Bond, GameState, HRState, TQMState,

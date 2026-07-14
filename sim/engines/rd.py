@@ -1,13 +1,13 @@
 """
 R&D engine.
 
-Per BizSim:
+Per CompMastery:
   - R&D project time = base_time + distance_to_new_position × time_per_unit_distance
     Roughly: 1.0 year for short revise (≤0.5 units), up to 3 years for big move
   - Age halves on revise (e.g., age 5.0 -> 2.5)
   - Cost = $1M base + position move cost + MTBF change cost
   - MTBF can move up to +/-5000 units per project
-  - Cannot launch new products in BizSim (only modify existing 4)
+  - Cannot launch new products in CompMastery (only modify existing 4)
 
 Reference: business-simulation R&D rules
 """
@@ -119,7 +119,7 @@ def end_of_year_apply_completed_projects(p: Product, year_end_date: str = "2026-
     """
     At year-end, finalize any R&D project that completed during the year.
 
-    BizSim age mechanics (CORRECTED):
+    CompMastery age mechanics (CORRECTED):
       1. Product ages during R&D from start-of-year to completion
       2. At completion, age HALVES
       3. After completion, ages normally until year-end

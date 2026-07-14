@@ -1,4 +1,4 @@
-"""Public legal and support pages for the BizSim web application."""
+"""Public legal and support pages for the CompMastery web application."""
 from __future__ import annotations
 
 from html import escape
@@ -48,28 +48,28 @@ def _contact_block() -> None:
 
 
 def _privacy() -> None:
-    st.title("BizSim Privacy Notice")
+    st.title("CompMastery Privacy Notice")
     st.caption(f"Last updated: {LAST_UPDATED}")
     st.markdown(
         """
-BizSim collects the minimum information needed to operate the service: your email
+CompMastery collects the minimum information needed to operate the service: your email
 address and account identifier, saved game decisions and results, entitlement and
 transaction references, and basic technical logs used for security and reliability.
 
 We use this information to authenticate users, save games, provide purchased access,
 prevent abuse, troubleshoot failures, and improve service reliability. Payment-card
-details are handled by Lemon Squeezy and are not stored by BizSim.
+details are handled by Lemon Squeezy and are not stored by CompMastery.
 
-Service data may be processed by infrastructure providers used to run BizSim,
-including Supabase, Railway, Lemon Squeezy, and an error-monitoring provider when one
-is configured. We do not sell personal information.
+Service data may be processed by infrastructure providers used to run CompMastery,
+including Supabase, Streamlit Community Cloud, Lemon Squeezy, and an error-monitoring
+provider when one is configured. We do not sell personal information.
 
 We retain account and gameplay data while the account is active and as reasonably
 needed for security, accounting, dispute resolution, and legal obligations. You may
 request access, correction, or deletion of your account data by contacting support.
 
 We use reasonable technical safeguards, but no online service can guarantee absolute
-security. BizSim is not directed to children under 13. This notice may be updated as
+security. CompMastery is not directed to children under 13. This notice may be updated as
 the service or legal requirements change.
 """
     )
@@ -77,15 +77,15 @@ the service or legal requirements change.
 
 
 def _terms() -> None:
-    st.title("BizSim Terms of Service")
+    st.title("CompMastery Terms of Service")
     st.caption(f"Last updated: {LAST_UPDATED}")
     st.markdown(
         """
-By creating an account or using BizSim, you agree to these terms. You must provide
+By creating an account or using CompMastery, you agree to these terms. You must provide
 accurate account information, keep your credentials secure, and use the service only
 for lawful personal or educational purposes.
 
-BizSim provides a business-strategy practice simulation. Results, scores, projections,
+CompMastery provides a business-strategy practice simulation. Results, scores, projections,
 and reports are educational and are not financial, investment, legal, or professional
 advice. Outcomes in the simulation do not guarantee real-world results.
 
@@ -95,12 +95,12 @@ the checkout terms and applicable law. Deleting a game does not restore a consum
 demo or extend paid access.
 
 You may not interfere with the service, bypass access controls, scrape or overload the
-application, misuse another person's account, or copy and resell the service. BizSim
+application, misuse another person's account, or copy and resell the service. CompMastery
 may suspend access when reasonably necessary to protect users, the service, or comply
 with law.
 
 The service is provided on an as-available basis. To the maximum extent permitted by
-law, BizSim is not liable for indirect or consequential loss. Nothing in these terms
+law, CompMastery is not liable for indirect or consequential loss. Nothing in these terms
 limits rights that cannot legally be excluded. We may update these terms and will post
 the revised date on this page.
 """
@@ -109,11 +109,11 @@ the revised date on this page.
 
 
 def _support() -> None:
-    st.title("BizSim Support")
+    st.title("CompMastery Support")
     st.markdown(
         """
 For account access, billing, payment unlocks, data requests, or technical problems,
-contact us with the email address used for your BizSim account. Do not send passwords,
+contact us with the email address used for your CompMastery account. Do not send passwords,
 full card numbers, access tokens, or other secrets.
 
 For billing questions, include the Lemon Squeezy order reference from your receipt.
@@ -132,6 +132,6 @@ def render_public_page_if_requested() -> None:
     if page not in renderers:
         return
     renderers[page]()
-    st.markdown("[Back to BizSim](?)")
+    st.markdown("[Back to CompMastery](?)")
     render_legal_links()
     st.stop()

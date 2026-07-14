@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     return new Response("product validation not configured", { status: 500 });
   }
   if (storeId !== expectedStore || !allowedVariants.includes(variantId)) {
-    return new Response("order is not for BizSim", { status: 200 });
+    return new Response("order is not for CompMastery", { status: 200 });
   }
 
   const url = Deno.env.get("SUPABASE_URL");

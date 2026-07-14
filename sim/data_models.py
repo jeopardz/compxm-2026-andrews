@@ -1,5 +1,5 @@
 """
-Pydantic data models for BizSim 2026 simulator.
+Pydantic data models for CompMastery 2026 simulator.
 
 Conventions:
 - Money in $ (full dollars, not thousands) unless _k suffix
@@ -123,7 +123,7 @@ class Bond(BaseModel):
 # ============================================================
 
 class HRState(BaseModel):
-    """BizSim HR: Complement + Recruit Spend + Training Hours."""
+    """CompMastery HR: Complement + Recruit Spend + Training Hours."""
     workforce_complement: int = 0     # Total needed across all production
     needed_complement: int = 0
     first_shift_complement: int = 0

@@ -1,5 +1,5 @@
 """
-BizSim — an interactive business-strategy simulator.
+CompMastery — an interactive business-strategy simulator.
 
 Modules:
 - data_models: Pydantic schemas

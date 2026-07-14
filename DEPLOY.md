@@ -1,4 +1,4 @@
-# Deploy BizSim on Railway
+# Deploy CompMastery on Streamlit Community Cloud
 
 ## Required configuration
 
@@ -12,15 +12,15 @@ Apply every SQL migration in `supabase/migrations/` in numeric order, then deplo
 - Edge Function secrets: `LS_SIGNING_SECRET`, `LS_STORE_ID`, `LS_VARIANT_IDS`,
   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-`LS_VARIANT_IDS` is a comma-separated allowlist of paid BizSim variant IDs. Never
+`LS_VARIANT_IDS` is a comma-separated allowlist of paid CompMastery variant IDs. Never
 put the service-role key or signing secret in Streamlit secrets or source control.
 
-## Railway
+## Streamlit Community Cloud
 
-Connect the repository to Railway. The checked-in `railway.json` installs the root
-`requirements.txt`, starts Streamlit on `$PORT`, and uses `/_stcore/health` for the
-health check. Add the app variables above in Railway, deploy, then set the public
-domain as the Lemon Squeezy checkout return URL.
+Connect the GitHub repository in Streamlit Community Cloud and set `sim/app.py` as
+the entry point. Add the app variables above in the app's Secrets settings, deploy,
+then set the public `streamlit.app` domain as the Lemon Squeezy checkout return URL.
+Keep `.streamlit/secrets.toml` local and never commit it.
 
 ## Release check
 

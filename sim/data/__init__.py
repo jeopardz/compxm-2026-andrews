@@ -1,1 +1,1 @@
-"""Starting-state and scenario data for BizSim."""
+"""Starting-state and scenario data for CompMastery."""

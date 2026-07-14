@@ -1,5 +1,5 @@
 """
-BizSim market report generator.
+CompMastery market report generator.
 
 Produces:
   - Front Page (financial summary across 4 companies)

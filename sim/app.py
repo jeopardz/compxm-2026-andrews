@@ -1,5 +1,5 @@
 """
-BizSim 2026 Apex Simulator — Streamlit UI (BizSim-styled)
+CompMastery — Competitive Business Simulator
 
 Run with:
     streamlit run sim/app.py
@@ -40,7 +40,7 @@ from sim import game_session as gs
 SAVE_PATH = Path(__file__).parent / "save_state.json"
 
 st.set_page_config(
-    page_title="BizSim 2026 — Apex",
+    page_title="CompMastery — Competitive Business Simulator",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -49,24 +49,24 @@ init_monitoring()
 
 
 # ============================================================
-# BIZSIM-STYLE CSS (extensive theming)
+# COMPMASTERY-STYLE CSS (extensive theming)
 # ============================================================
 
-BIZSIM_CSS = """
+COMPMASTERY_CSS = """
 <style>
-    /* Color tokens — BizSim navy/white/gold */
+    /* Color tokens — CompMastery navy/white/gold */
     :root {
-        --bizsim-navy: #1a365d;
-        --bizsim-navy-dark: #0f2440;
-        --bizsim-navy-light: #2c5282;
-        --bizsim-gold: #d69e2e;
-        --bizsim-gold-dark: #b7791f;
-        --bizsim-red: #c53030;
-        --bizsim-green: #2f855a;
-        --bizsim-bg: #f7fafc;
-        --bizsim-border: #cbd5e0;
-        --bizsim-text: #2d3748;
-        --bizsim-text-muted: #718096;
+        --compmastery-navy: #1a365d;
+        --compmastery-navy-dark: #0f2440;
+        --compmastery-navy-light: #2c5282;
+        --compmastery-gold: #d69e2e;
+        --compmastery-gold-dark: #b7791f;
+        --compmastery-red: #c53030;
+        --compmastery-green: #2f855a;
+        --compmastery-bg: #f7fafc;
+        --compmastery-border: #cbd5e0;
+        --compmastery-text: #2d3748;
+        --compmastery-text-muted: #718096;
     }
 
     /* Hide Streamlit chrome */
@@ -74,109 +74,109 @@ BIZSIM_CSS = """
     .block-container { padding-top: 0.5rem; padding-bottom: 1rem; max-width: 1400px; }
 
     /* Base */
-    .stApp { background-color: var(--bizsim-bg); color: var(--bizsim-text); }
+    .stApp { background-color: var(--compmastery-bg); color: var(--compmastery-text); }
 
-    /* === BIZSIM HEADER BAR === */
-    .bizsim-header {
-        background: linear-gradient(135deg, var(--bizsim-navy) 0%, var(--bizsim-navy-dark) 100%);
+    /* === COMPMASTERY HEADER BAR === */
+    .compmastery-header {
+        background: linear-gradient(135deg, var(--compmastery-navy) 0%, var(--compmastery-navy-dark) 100%);
         color: white;
         padding: 12px 24px;
         margin: -10px -10px 16px -10px;
-        border-bottom: 4px solid var(--bizsim-gold);
+        border-bottom: 4px solid var(--compmastery-gold);
         display: flex;
         justify-content: space-between;
         align-items: center;
         font-family: 'Segoe UI', Arial, sans-serif;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .bizsim-logo {
+    .compmastery-logo {
         font-size: 22px;
         font-weight: 700;
         letter-spacing: 0.5px;
     }
-    .bizsim-logo .sub {
+    .compmastery-logo .sub {
         font-size: 12px; font-weight: 400; color: #cbd5e0; margin-left: 8px;
         letter-spacing: 1px;
     }
-    .bizsim-round-badge {
-        background: var(--bizsim-gold);
-        color: var(--bizsim-navy-dark);
+    .compmastery-round-badge {
+        background: var(--compmastery-gold);
+        color: var(--compmastery-navy-dark);
         padding: 4px 14px;
         border-radius: 4px;
         font-weight: 700;
         font-size: 14px;
         letter-spacing: 0.5px;
     }
-    .bizsim-tagline {
+    .compmastery-tagline {
         font-size: 11px; color: #cbd5e0; text-align: right;
     }
 
     /* === NAV TABS === */
     div[data-baseweb="tab-list"] {
         background-color: white;
-        border-bottom: 2px solid var(--bizsim-navy);
+        border-bottom: 2px solid var(--compmastery-navy);
         gap: 0;
         margin-bottom: 16px;
     }
     button[data-baseweb="tab"] {
         background-color: #edf2f7;
-        color: var(--bizsim-navy);
+        color: var(--compmastery-navy);
         border-radius: 0;
-        border-right: 1px solid var(--bizsim-border);
+        border-right: 1px solid var(--compmastery-border);
         padding: 8px 16px !important;
         font-weight: 600;
         font-size: 13px;
         margin: 0 !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background-color: var(--bizsim-navy);
+        background-color: var(--compmastery-navy);
         color: white;
-        border-bottom: 2px solid var(--bizsim-gold);
+        border-bottom: 2px solid var(--compmastery-gold);
     }
 
     /* === HEADINGS === */
-    h1 { color: var(--bizsim-navy); font-weight: 700; }
-    h2 { color: var(--bizsim-navy); border-bottom: 2px solid var(--bizsim-gold); padding-bottom: 4px; font-weight: 700; font-size: 1.4rem; }
-    h3 { color: var(--bizsim-navy); font-weight: 600; font-size: 1.15rem; }
+    h1 { color: var(--compmastery-navy); font-weight: 700; }
+    h2 { color: var(--compmastery-navy); border-bottom: 2px solid var(--compmastery-gold); padding-bottom: 4px; font-weight: 700; font-size: 1.4rem; }
+    h3 { color: var(--compmastery-navy); font-weight: 600; font-size: 1.15rem; }
 
     /* === SECTION CARD === */
-    .bizsim-section {
+    .compmastery-section {
         background: white;
-        border: 1px solid var(--bizsim-border);
-        border-top: 3px solid var(--bizsim-navy);
+        border: 1px solid var(--compmastery-border);
+        border-top: 3px solid var(--compmastery-navy);
         padding: 14px 18px;
         margin: 8px 0;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .bizsim-section-title {
-        color: var(--bizsim-navy);
+    .compmastery-section-title {
+        color: var(--compmastery-navy);
         font-weight: 700;
         font-size: 14px;
         text-transform: uppercase;
         letter-spacing: 1px;
-        border-bottom: 1px solid var(--bizsim-border);
+        border-bottom: 1px solid var(--compmastery-border);
         padding-bottom: 6px;
         margin-bottom: 10px;
     }
 
-    /* === KPI CARDS (mimics BizSim metric tiles) === */
+    /* === KPI CARDS (mimics CompMastery metric tiles) === */
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
     .kpi-card {
-        background: white; border: 1px solid var(--bizsim-border);
-        padding: 10px 12px; border-left: 3px solid var(--bizsim-navy);
+        background: white; border: 1px solid var(--compmastery-border);
+        padding: 10px 12px; border-left: 3px solid var(--compmastery-navy);
     }
-    .kpi-card.up { border-left-color: var(--bizsim-green); }
-    .kpi-card.down { border-left-color: var(--bizsim-red); }
-    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--bizsim-text-muted); font-weight: 600; }
-    .kpi-value { font-size: 18px; font-weight: 700; color: var(--bizsim-navy); margin: 2px 0; }
-    .kpi-delta { font-size: 11px; color: var(--bizsim-text-muted); }
-    .kpi-delta.up { color: var(--bizsim-green); }
-    .kpi-delta.down { color: var(--bizsim-red); }
+    .kpi-card.up { border-left-color: var(--compmastery-green); }
+    .kpi-card.down { border-left-color: var(--compmastery-red); }
+    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--compmastery-text-muted); font-weight: 600; }
+    .kpi-value { font-size: 18px; font-weight: 700; color: var(--compmastery-navy); margin: 2px 0; }
+    .kpi-delta { font-size: 11px; color: var(--compmastery-text-muted); }
+    .kpi-delta.up { color: var(--compmastery-green); }
+    .kpi-delta.down { color: var(--compmastery-red); }
 
-    /* === DATA TABLES (BizSim spreadsheet style) === */
+    /* === DATA TABLES (CompMastery spreadsheet style) === */
     .stDataFrame, .stTable { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }
     .stDataFrame [data-testid="stDataFrameResizable"] table thead th {
-        background-color: var(--bizsim-navy) !important;
+        background-color: var(--compmastery-navy) !important;
         color: white !important;
         font-weight: 700 !important;
         text-transform: uppercase;
@@ -184,16 +184,16 @@ BIZSIM_CSS = """
         letter-spacing: 0.5px;
     }
     .stDataFrame [data-testid="stDataFrameResizable"] table tbody tr:nth-child(even) {
-        background-color: var(--bizsim-bg);
+        background-color: var(--compmastery-bg);
     }
     .stDataFrame [data-testid="stDataFrameResizable"] table tbody td {
         padding: 4px 8px !important;
-        border-color: var(--bizsim-border) !important;
+        border-color: var(--compmastery-border) !important;
     }
 
     /* === BUTTONS === */
     .stButton button {
-        background-color: var(--bizsim-navy);
+        background-color: var(--compmastery-navy);
         color: white;
         border: none;
         border-radius: 2px;
@@ -203,26 +203,26 @@ BIZSIM_CSS = """
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    .stButton button:hover { background-color: var(--bizsim-navy-light); transform: none; }
+    .stButton button:hover { background-color: var(--compmastery-navy-light); transform: none; }
     .stButton button[kind="primary"] {
-        background-color: var(--bizsim-gold);
-        color: var(--bizsim-navy-dark);
+        background-color: var(--compmastery-gold);
+        color: var(--compmastery-navy-dark);
     }
-    .stButton button[kind="primary"]:hover { background-color: var(--bizsim-gold-dark); }
+    .stButton button[kind="primary"]:hover { background-color: var(--compmastery-gold-dark); }
 
     /* === FORM INPUTS === */
     .stNumberInput input, .stTextInput input, .stSelectbox div[data-baseweb="select"] {
-        border: 1px solid var(--bizsim-border) !important;
+        border: 1px solid var(--compmastery-border) !important;
         border-radius: 2px !important;
         font-family: 'Consolas', monospace !important;
         font-size: 13px !important;
     }
-    .stNumberInput input:focus { border-color: var(--bizsim-navy) !important; box-shadow: 0 0 0 1px var(--bizsim-navy) !important; }
-    .stSlider [data-baseweb="slider"] > div > div > div { background-color: var(--bizsim-navy) !important; }
+    .stNumberInput input:focus { border-color: var(--compmastery-navy) !important; box-shadow: 0 0 0 1px var(--compmastery-navy) !important; }
+    .stSlider [data-baseweb="slider"] > div > div > div { background-color: var(--compmastery-navy) !important; }
 
     /* === EXPANDERS === */
     .streamlit-expanderHeader {
-        background-color: var(--bizsim-navy) !important;
+        background-color: var(--compmastery-navy) !important;
         color: white !important;
         font-weight: 700 !important;
         text-transform: uppercase;
@@ -232,14 +232,14 @@ BIZSIM_CSS = """
         border-radius: 0 !important;
     }
     div[data-testid="stExpander"] {
-        border: 1px solid var(--bizsim-border) !important;
+        border: 1px solid var(--compmastery-border) !important;
         margin-bottom: 8px;
     }
 
     /* === NEWSPAPER-STYLE MARKET REPORT === */
     .report-paper {
         background: white;
-        border: 2px solid var(--bizsim-navy);
+        border: 2px solid var(--compmastery-navy);
         padding: 20px 28px;
         font-family: 'Georgia', 'Times New Roman', serif;
         max-width: 100%;
@@ -247,7 +247,7 @@ BIZSIM_CSS = """
     }
     .report-masthead {
         text-align: center;
-        border-bottom: 3px double var(--bizsim-navy);
+        border-bottom: 3px double var(--compmastery-navy);
         padding-bottom: 12px;
         margin-bottom: 18px;
     }
@@ -256,17 +256,17 @@ BIZSIM_CSS = """
         font-size: 38px !important;
         margin: 0;
         letter-spacing: 4px;
-        color: var(--bizsim-navy);
+        color: var(--compmastery-navy);
     }
     .report-masthead .subtitle {
         font-size: 13px;
-        color: var(--bizsim-text-muted);
+        color: var(--compmastery-text-muted);
         text-transform: uppercase;
         letter-spacing: 2px;
         margin-top: 4px;
     }
     .report-section-head {
-        background: var(--bizsim-navy);
+        background: var(--compmastery-navy);
         color: white;
         padding: 6px 12px;
         font-weight: 700;
@@ -279,17 +279,17 @@ BIZSIM_CSS = """
     .report-page-marker {
         text-align: right;
         font-size: 11px;
-        color: var(--bizsim-text-muted);
+        color: var(--compmastery-text-muted);
         font-style: italic;
         margin-top: 8px;
-        border-top: 1px solid var(--bizsim-border);
+        border-top: 1px solid var(--compmastery-border);
         padding-top: 4px;
     }
 
     /* Annual Report classic style */
     .annual-report {
         background: white;
-        border: 1px solid var(--bizsim-border);
+        border: 1px solid var(--compmastery-border);
         padding: 20px;
         font-family: 'Times New Roman', serif;
     }
@@ -302,24 +302,24 @@ BIZSIM_CSS = """
         margin: 8px 0;
     }
     .annual-report table th {
-        background: var(--bizsim-navy);
+        background: var(--compmastery-navy);
         color: white;
         padding: 4px 8px;
         text-align: left;
     }
     .annual-report table td {
         padding: 3px 8px;
-        border-bottom: 1px solid var(--bizsim-border);
+        border-bottom: 1px solid var(--compmastery-border);
     }
     .annual-report table tr.total {
         font-weight: 700;
-        border-top: 2px solid var(--bizsim-navy);
-        background: var(--bizsim-bg);
+        border-top: 2px solid var(--compmastery-navy);
+        background: var(--compmastery-bg);
     }
 
     /* Module navigation (left side of decision pages) */
     .module-nav {
-        background: var(--bizsim-navy);
+        background: var(--compmastery-navy);
         color: white;
         padding: 0;
         margin: 8px 0;
@@ -327,23 +327,23 @@ BIZSIM_CSS = """
     .module-nav-item {
         display: block;
         padding: 8px 14px;
-        border-bottom: 1px solid var(--bizsim-navy-light);
+        border-bottom: 1px solid var(--compmastery-navy-light);
         color: white;
         text-decoration: none;
         font-size: 13px;
         font-weight: 600;
     }
-    .module-nav-item:hover { background: var(--bizsim-navy-light); }
-    .module-nav-item.active { background: var(--bizsim-gold); color: var(--bizsim-navy-dark); }
+    .module-nav-item:hover { background: var(--compmastery-navy-light); }
+    .module-nav-item.active { background: var(--compmastery-gold); color: var(--compmastery-navy-dark); }
 
     /* Footer */
-    .bizsim-footer {
+    .compmastery-footer {
         text-align: center;
         font-size: 10px;
-        color: var(--bizsim-text-muted);
+        color: var(--compmastery-text-muted);
         margin-top: 20px;
         padding-top: 8px;
-        border-top: 1px solid var(--bizsim-border);
+        border-top: 1px solid var(--compmastery-border);
         letter-spacing: 1px;
         text-transform: uppercase;
     }
@@ -368,20 +368,20 @@ BIZSIM_CSS = """
 
     /* Streamlit metric override */
     div[data-testid="stMetric"] {
-        background: white; border: 1px solid var(--bizsim-border);
-        border-left: 3px solid var(--bizsim-navy);
+        background: white; border: 1px solid var(--compmastery-border);
+        border-left: 3px solid var(--compmastery-navy);
         padding: 8px 12px;
     }
     div[data-testid="stMetricLabel"] {
         font-size: 10px !important;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: var(--bizsim-text-muted) !important;
+        color: var(--compmastery-text-muted) !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricValue"] {
         font-size: 20px !important;
-        color: var(--bizsim-navy) !important;
+        color: var(--compmastery-navy) !important;
         font-weight: 700 !important;
     }
     div[data-testid="stMetricDelta"] {
@@ -390,7 +390,7 @@ BIZSIM_CSS = """
 </style>
 """
 
-st.markdown(BIZSIM_CSS, unsafe_allow_html=True)
+st.markdown(COMPMASTERY_CSS, unsafe_allow_html=True)
 render_public_page_if_requested()
 
 
@@ -576,17 +576,17 @@ apex = state.get_company("Apex")
 
 
 # ============================================================
-# HEADER (BizSim-style)
+# HEADER (CompMastery-style)
 # ============================================================
 
 st.markdown(f"""
-<div class="bizsim-header">
-    <div class="bizsim-logo">
-        BIZSIM
-        <span class="sub">BUSINESS STRATEGY SIMULATOR • APEX CORPORATION</span>
+<div class="compmastery-header">
+    <div class="compmastery-logo">
+        COMPMASTERY
+        <span class="sub">COMPETITIVE BUSINESS SIMULATOR • APEX CORPORATION</span>
     </div>
     <div>
-        <span class="bizsim-round-badge">ROUND {state.round_num} / 4</span>
+        <span class="compmastery-round-badge">ROUND {state.round_num} / 4</span>
         <span style="margin-left:12px; font-size:12px;">DEC 31, {state.year}</span>
     </div>
 </div>
@@ -639,7 +639,7 @@ st.markdown("<hr style='margin: 4px 0;'>", unsafe_allow_html=True)
 
 
 # ============================================================
-# TOP NAVIGATION TABS (mimics BizSim's top bar)
+# TOP NAVIGATION TABS (mimics CompMastery's top bar)
 # ============================================================
 
 tab_dash, tab_rd, tab_mkt, tab_prod, tab_fin, tab_hr, tab_tqm, tab_report, tab_icr, tab_bsc, tab_bq, tab_hist = st.tabs([
@@ -682,7 +682,7 @@ def fmt_pct(x):
 
 
 def kpi_card(label, value, delta=None, direction=None):
-    """Render a BizSim-style KPI card."""
+    """Render a CompMastery-style KPI card."""
     dir_class = direction or ""
     delta_html = ""
     if delta is not None:
@@ -707,7 +707,7 @@ def ensure_pending():
     if (st.session_state.pending_decisions is None
             or st.session_state.pending_decisions.round_num != decision_round):
         # Pre-populate sensible defaults
-        # Production Schedule = Forecast - Inventory + 5% safety buffer (BizSim playbook)
+        # Production Schedule = Forecast - Inventory + 5% safety buffer (CompMastery playbook)
         prod_decisions = []
         for p in apex.products:
             seg = next((s for s in state.segments if s.name == p.primary_segment), None)
@@ -741,7 +741,7 @@ def ensure_pending():
 # ============================================================
 
 with tab_dash:
-    st.markdown('<div class="bizsim-section-title">Dashboard Summary</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title">Dashboard Summary</div>', unsafe_allow_html=True)
 
     # Selected Financial Statistics table (market report, page 1)
     st.markdown('<div class="report-section-head">Selected Financial Statistics</div>', unsafe_allow_html=True)
@@ -763,7 +763,7 @@ with tab_dash:
 
 
     # KPI strip — Apex focus
-    st.markdown('<div class="bizsim-section"><div class="bizsim-section-title">Apex Snapshot</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section"><div class="compmastery-section-title">Apex Snapshot</div>', unsafe_allow_html=True)
 
     cols = st.columns(8)
     delta_stock = apex.stock_price - 95.38
@@ -781,7 +781,7 @@ with tab_dash:
     # Perceptual Map
     col_map, col_pos = st.columns([3, 2])
     with col_map:
-        st.markdown('<div class="bizsim-section"><div class="bizsim-section-title">Perceptual Map — Current + Drift Trajectory</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section"><div class="compmastery-section-title">Perceptual Map — Current + Drift Trajectory</div>', unsafe_allow_html=True)
 
         show_drift = st.checkbox("📍 Show segment ideal drift trajectory (R0 → R4)",
                                   value=True, key="show_drift",
@@ -900,7 +900,7 @@ with tab_dash:
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_pos:
-        st.markdown('<div class="bizsim-section"><div class="bizsim-section-title">Apex Products</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section"><div class="compmastery-section-title">Apex Products</div>', unsafe_allow_html=True)
         for p in apex.products:
             seg = state.get_segment(p.primary_segment)
             health = "good" if p.age <= seg.ideal_age + 1 else ("warn" if p.age <= seg.ideal_age + 2.5 else "bad")
@@ -915,7 +915,7 @@ with tab_dash:
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="bizsim-section-title">Stocks & Bonds Summary</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title">Stocks & Bonds Summary</div>', unsafe_allow_html=True)
 
     col_st, col_bd = st.columns(2)
     with col_st:
@@ -954,10 +954,10 @@ with tab_dash:
 # ============================================================
 
 with tab_rd:
-    st.markdown('<div class=\"bizsim-section-title\">' + ('Research & Development — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Research & Development — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"compmastery-section-title\">' + ('Research & Development — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Research & Development — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
-    st.caption("BizSim rules: Age halves when a repositioning project completes. Duration uses a 45-day floor + 175 days per map-distance unit, then automation, concurrency, and TQM adjustments. Cost starts at \\$1M plus position and MTBF changes.")
+    st.caption("CompMastery rules: Age halves when a repositioning project completes. Duration uses a 45-day floor + 175 days per map-distance unit, then automation, concurrency, and TQM adjustments. Cost starts at \\$1M plus position and MTBF changes.")
 
     from datetime import date, timedelta
     from math import sqrt
@@ -966,7 +966,7 @@ with tab_rd:
     round_start = date(state.year + 1, 1, 1)
     round_end = date(state.year + 1, 12, 31)
 
-    # Spreadsheet-like grid (mimics BizSim R&D spreadsheet) — 11 columns
+    # Spreadsheet-like grid (mimics CompMastery R&D spreadsheet) — 11 columns
     col_widths = [1.2, 0.7, 0.7, 0.8, 0.7, 0.7, 0.7, 0.8, 1.3, 0.9, 1.0]
     cols_header = st.columns(col_widths)
     headers = ["Product", "Cur Pfmn", "Cur Size", "Cur MTBF", "Cur Age", "→ Pfmn", "→ Size", "→ MTBF", "Revision Date", "New Age", "Est. Cost"]
@@ -1089,7 +1089,7 @@ with tab_rd:
 
     # Segment drift forecast — matches Industry Conditions Report convention
     # Table A: Centers per round  +  Table B: Ideal Offsets (constant)
-    st.markdown('<div class="bizsim-section-title" style="margin-top:20px;">📍 Segment Centers per Round (Industry Conditions Report Table 2)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title" style="margin-top:20px;">📍 Segment Centers per Round (Industry Conditions Report Table 2)</div>', unsafe_allow_html=True)
     st.caption("Segment **centers** drift each year by the rates below. Customer **ideal spot** = Center + Ideal Offset (offset is constant — see Table B).")
 
     center_rows = []
@@ -1106,7 +1106,7 @@ with tab_rd:
         center_rows.append(row)
     st.dataframe(pd.DataFrame(center_rows), width="stretch", hide_index=True)
 
-    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">📍 Ideal Spot Offsets (Industry Conditions Report Table 3 — Constant)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title" style="margin-top:16px;">📍 Ideal Spot Offsets (Industry Conditions Report Table 3 — Constant)</div>', unsafe_allow_html=True)
     st.caption("These offsets do NOT change between rounds. Customers prefer products at (Center + Offset).")
 
     offset_rows = []
@@ -1140,7 +1140,7 @@ with tab_rd:
 # ============================================================
 
 with tab_mkt:
-    st.markdown('<div class=\"bizsim-section-title\">' + ('Marketing — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Marketing — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"compmastery-section-title\">' + ('Marketing — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Marketing — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("Promo: \\$1.4M maintain / \\$2M grow / \\$3M cap • Sales: \\$3M/product or \\$4.5M combined / segment")
@@ -1222,7 +1222,7 @@ with tab_mkt:
     """, unsafe_allow_html=True)
 
     # === PLAYBOOK RECOMMENDED FORECAST TABLE ===
-    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">📚 Playbook Recommended Forecasts (Pessimistic + Optimistic)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title" style="margin-top:16px;">📚 Playbook Recommended Forecasts (Pessimistic + Optimistic)</div>', unsafe_allow_html=True)
     st.caption("Strategy: use **Pessimistic** in Forecast for safer BSC accuracy, and **Optimistic** in Production Schedule to reduce stockout risk.")
     rec_rows = []
     for p in apex.products:
@@ -1245,7 +1245,7 @@ with tab_mkt:
 # ============================================================
 
 with tab_prod:
-    st.markdown('<div class=\"bizsim-section-title\">' + ('Production — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Production — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"compmastery-section-title\">' + ('Production — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Production — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("Capacity in 000s units. 1 shift = 100% util, 2 shifts = 200% max. Automation 1-10 (\\$4/unit/level).")
@@ -1340,7 +1340,7 @@ with tab_prod:
     # SCHEDULE SUMMARY — Forecast vs Production vs Utilization
     # ============================================================
     from sim.engines.production import labor_cost_factor as _lcf, SECOND_SHIFT_LABOR_MULTIPLIER, INVENTORY_CARRY_PCT
-    st.markdown('<div class="bizsim-section-title" style="margin-top:20px;">📋 Schedule Summary (Forecast → Production → Utilization)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title" style="margin-top:20px;">📋 Schedule Summary (Forecast → Production → Utilization)</div>', unsafe_allow_html=True)
     sched_rows = []
     for i, p in enumerate(apex.products):
         fc = pending.products[i].forecast or 0
@@ -1374,7 +1374,7 @@ with tab_prod:
     # ============================================================
     # MARGINS — Per-unit costs and contribution
     # ============================================================
-    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">📊 Margins (Per-Unit Cost Breakdown)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title" style="margin-top:16px;">📊 Margins (Per-Unit Cost Breakdown)</div>', unsafe_allow_html=True)
     pi = apex.hr.productivity_index
     tqm_mat = apex.tqm.material_cost_reduction
     tqm_lab = apex.tqm.labor_cost_reduction
@@ -1410,7 +1410,7 @@ with tab_prod:
     # ============================================================
     # WORKFORCE SUMMARY
     # ============================================================
-    st.markdown('<div class="bizsim-section-title" style="margin-top:16px;">👥 Workforce Summary</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title" style="margin-top:16px;">👥 Workforce Summary</div>', unsafe_allow_html=True)
     # Estimate needed employees from scheduled production
     total_prod = sum((pd.production_schedule or 0) for pd in pending.products)
     needed = max(50, int(total_prod * 0.144))
@@ -1440,7 +1440,7 @@ with tab_prod:
 # ============================================================
 
 with tab_fin:
-    st.markdown('<div class=\"bizsim-section-title\">' + ('Finance — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Finance — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"compmastery-section-title\">' + ('Finance — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Finance — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     col_bnd, col_stk = st.columns(2)
@@ -1535,7 +1535,7 @@ with tab_fin:
     st.divider()
     cf_col, lb_col = st.columns([3, 2])
     with cf_col:
-        st.markdown('<div class="bizsim-section-title">💵 Projected Cash Flow Summary</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section-title">💵 Projected Cash Flow Summary</div>', unsafe_allow_html=True)
         # Compute projected components using FULL P&L simulation that reflects
         # pending HR / TQM / Marketing / R&D / Price decisions
         from sim.engines.finance import max_new_bond_capacity, project_next_round_pl
@@ -1600,7 +1600,7 @@ with tab_fin:
         st.caption("✅ NOW reflects pending HR / TQM / Marketing / R&D / Price changes. Still approximate — actual round may differ on sales realized & AR/AP changes.")
 
     with lb_col:
-        st.markdown('<div class="bizsim-section-title">🥧 Liabilities & Owner\'s Equity</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section-title">🥧 Liabilities & Owner\'s Equity</div>', unsafe_allow_html=True)
         ap_val = apex.accounts_payable
         cd_val = apex.current_debt
         ltd_val = sum(b.face_value for b in apex.bonds)
@@ -1615,7 +1615,7 @@ with tab_fin:
         st.plotly_chart(fig, width="stretch")
 
     # Outstanding Bonds detail
-    st.markdown('<div class="bizsim-section-title">📜 Outstanding Bonds</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title">📜 Outstanding Bonds</div>', unsafe_allow_html=True)
     outst_bonds = pd.DataFrame([{
         "Series": b.series,
         "Face Amount": fmt_money(b.face_value),
@@ -1632,7 +1632,7 @@ with tab_fin:
 # ============================================================
 
 with tab_hr:
-    st.markdown('<div class=\"bizsim-section-title\">' + ('Human Resources — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Human Resources — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"compmastery-section-title\">' + ('Human Resources — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Human Resources — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("HR module: Recruit Spend (\\$0-\\$5K) + Training Hours (0-80hr × \\$20). Workforce Complement is set on the Production page.")
@@ -1682,7 +1682,7 @@ with tab_hr:
     st.divider()
     imp_col1, imp_col2 = st.columns(2)
     with imp_col1:
-        st.markdown('<div class="bizsim-section-title">📅 Yearly Impacts (this round\'s decision)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section-title">📅 Yearly Impacts (this round\'s decision)</div>', unsafe_allow_html=True)
         pi_delta = pi_new - apex.hr.productivity_index
         turnover_delta = turnover_new - apex.hr.turnover_rate
         yi_df = pd.DataFrame([
@@ -1695,7 +1695,7 @@ with tab_hr:
         st.dataframe(yi_df, width="stretch", hide_index=True)
 
     with imp_col2:
-        st.markdown('<div class="bizsim-section-title">📈 Cumulative HR State</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section-title">📈 Cumulative HR State</div>', unsafe_allow_html=True)
         ci_df = pd.DataFrame([
             {"Metric": "Workforce Complement", "Value": f"{apex.hr.workforce_complement:,}"},
             {"Metric": "1st Shift", "Value": f"{apex.hr.first_shift_complement:,}"},
@@ -1712,7 +1712,7 @@ with tab_hr:
 # ============================================================
 
 with tab_tqm:
-    st.markdown('<div class=\"bizsim-section-title\">' + ('Total Quality Management — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Total Quality Management — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
+    st.markdown('<div class=\"compmastery-section-title\">' + ('Total Quality Management — Round {} Decisions'.format(state.round_num + 1) if state.round_num < 4 else 'Total Quality Management — Final State (Game Complete)') + '</div>', unsafe_allow_html=True)
     pending = ensure_pending()
 
     st.caption("10 initiatives, \\$0-\\$2M per round each, \\$4M cumulative cap per initiative. S-curve response.")
@@ -1756,7 +1756,7 @@ with tab_tqm:
 
     imp_col1, imp_col2 = st.columns(2)
     with imp_col1:
-        st.markdown('<div class="bizsim-section-title">📅 Yearly Impacts (this round\'s spend → projected)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section-title">📅 Yearly Impacts (this round\'s spend → projected)</div>', unsafe_allow_html=True)
         # Simulate what cumulative impacts will be AFTER applying this round's decisions
         proj_cumulative = {name: apex.tqm.cumulative_spend.get(name, 0) + tqm_decisions.get(name, 0)
                            for name in INITIATIVE_NAMES}
@@ -1784,7 +1784,7 @@ with tab_tqm:
         st.dataframe(yi_df, width="stretch", hide_index=True)
 
     with imp_col2:
-        st.markdown('<div class="bizsim-section-title">📈 Cumulative Impacts (all rounds to date)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compmastery-section-title">📈 Cumulative Impacts (all rounds to date)</div>', unsafe_allow_html=True)
         ci_df = pd.DataFrame([
             {"Metric": "Material Cost Reduction", "Value": f"{cur_mat*100:.1f}%", "Max": "-11.8%"},
             {"Metric": "Labor Cost Reduction", "Value": f"{cur_lab*100:.1f}%", "Max": "-14.0%"},
@@ -1810,7 +1810,7 @@ with tab_report:
     st.markdown(f"""
     <div class="report-paper" id="report-top">
         <div class="report-masthead">
-            <h1>BIZSIM MARKET REPORT</h1>
+            <h1>COMPMASTERY MARKET REPORT</h1>
             <div class="subtitle">Round {state.round_num} • Dec 31, {state.year} • Industry Report</div>
         </div>
         <h3 style="color:#1a365d; font-family:Georgia,serif; margin-bottom:8px;">Contents</h3>
@@ -1837,7 +1837,7 @@ with tab_report:
     <div class="report-paper" id="sec-1-front">
         <h2 style="display:flex; justify-content:space-between; align-items:center; color:#1a365d;">
             <span>Front Page</span>
-            <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year} &nbsp;&nbsp; BizSim-Apex</span>
+            <span style="font-size:13px; color:#718096;">Round {state.round_num} Dec. 31, {state.year} &nbsp;&nbsp; CompMastery-Apex</span>
         </h2><hr>
     """, unsafe_allow_html=True)
 
@@ -2043,7 +2043,7 @@ with tab_report:
     fig.update_layout(height=260, margin=dict(t=40, b=20), plot_bgcolor="white", paper_bgcolor="white")
     st.plotly_chart(fig, width="stretch")
 
-    # Plant Information table (matches BizSim 17-col format)
+    # Plant Information table (matches CompMastery 17-col format)
     st.markdown('<div style="font-weight:700; letter-spacing:1.1px; color:#1a365d; padding:8px 0;">PLANT INFORMATION</div>', unsafe_allow_html=True)
     prod_df = pd.DataFrame(market_report["production_analysis"])
     prod_df["2nd Shift OT"] = "—"
@@ -2353,7 +2353,7 @@ with tab_icr:
     <div class="report-paper">
         <div class="report-masthead">
             <h1 style="font-size:32px;">INDUSTRY CONDITIONS REPORT</h1>
-            <div class="subtitle">BizSim 2026 • Released at start of game • drift rates &amp; offsets are FIXED</div>
+            <div class="subtitle">CompMastery 2026 • Released at start of game • drift rates &amp; offsets are FIXED</div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -2448,7 +2448,7 @@ with tab_icr:
     st.markdown(f"**Prime Interest Rate Round 1:** {state.prime_interest_rate*100:.1f}%")
     st.caption("Affects short-term debt, long-term bond rates, and emergency loan penalty.")
 
-    st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Industry Conditions Report — BizSim 2026</div></div>', unsafe_allow_html=True)
+    st.markdown('<hr style="margin:8px 0;"><div style="text-align:right; font-weight:700; color:#1a365d;">Industry Conditions Report — CompMastery 2026</div></div>', unsafe_allow_html=True)
 
 
 # ============================================================
@@ -2456,7 +2456,7 @@ with tab_icr:
 # ============================================================
 
 with tab_bsc:
-    st.markdown('<div class="bizsim-section-title">Balanced Scorecard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title">Balanced Scorecard</div>', unsafe_allow_html=True)
     bsc = compute_round_bsc(state, "Apex",
                               prev_state=st.session_state.prev_state_snapshot)
 
@@ -2489,7 +2489,7 @@ with tab_bsc:
         with c[2]: kpi_card("Recap Customer", f"{cum.customer:.0f}", "of 20")
         with c[3]: kpi_card("Recap Learning", f"{cum.learning_growth:.0f}", "of 20")
 
-        # BizSim total = 500 Balanced Scorecard + 500 Board Queries = 1000.
+        # CompMastery total = 500 Balanced Scorecard + 500 Board Queries = 1000.
         #   BSC 500 = four 100-pt round scorecards + one 100-pt Recap.
         #   BQ  500 = five 100-pt board-query sets (correct/total × 100 each).
         round_total = sum(b["total"] for b in st.session_state.bsc_history)   # ≤ 400
@@ -2516,7 +2516,7 @@ with tab_bsc:
 # ============================================================
 
 with tab_bq:
-    st.markdown('<div class="bizsim-section-title">Board Queries</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title">Board Queries</div>', unsafe_allow_html=True)
     available_query_rounds = list(range(1, min(state.round_num, 4) + 1))
     if state.round_num >= 4:
         available_query_rounds.append(5)
@@ -2528,7 +2528,7 @@ with tab_bq:
     # Personalized board queries: generate from the CURRENT standings the first time a
     # round is opened, then freeze them (cache) so the numbers stay stable for that round.
     # Every correct answer is computed from the live engine — it reflects YOUR results,
-    # not a static bank (this is the defining BizSim board-query mechanic).
+    # not a static bank (this is the defining CompMastery board-query mechanic).
     if not available_query_rounds:
         st.info("Finish Round 1 to unlock its Board Queries.")
     elif round_to_query not in st.session_state.gen_queries:
@@ -2587,7 +2587,7 @@ with tab_bq:
 # ============================================================
 
 with tab_hist:
-    st.markdown('<div class="bizsim-section-title">Round-by-Round History & Trends</div>', unsafe_allow_html=True)
+    st.markdown('<div class="compmastery-section-title">Round-by-Round History & Trends</div>', unsafe_allow_html=True)
     if not state.history:
         st.info("No round history yet. Submit decisions in any decision tab, then use the global ADVANCE button below the tabs.")
     else:
@@ -2666,8 +2666,8 @@ render_legal_links()
 st.markdown("---")
 fcol1, fcol2, fcol3, fcol4 = st.columns([2, 1, 1, 1])
 with fcol1:
-    st.markdown(f"""<div class="bizsim-footer">
-        BIZSIM • BUSINESS STRATEGY SIMULATOR • APEX CORPORATION • R{state.round_num}/4
+    st.markdown(f"""<div class="compmastery-footer">
+        COMPMASTERY • COMPETITIVE BUSINESS SIMULATOR • APEX CORPORATION • R{state.round_num}/4
     </div>""", unsafe_allow_html=True)
 with fcol2:
     if st.button("💾 SAVE STATE"):

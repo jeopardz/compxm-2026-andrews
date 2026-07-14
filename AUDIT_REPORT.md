@@ -1,4 +1,4 @@
-# BizSim Audit Report — Remediation Result
+# CompMastery Audit Report — Remediation Result
 
 **Status:** Code remediation complete. Production rollout is still required before
 launch.

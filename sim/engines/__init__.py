@@ -1,1 +1,1 @@
-"""BizSim simulation engines."""
+"""CompMastery simulation engines."""
