@@ -20,13 +20,22 @@ from sim.engines.demand import allocate_demand, apply_stockouts
 
 def test_supabase_client_is_isolated_per_streamlit_session(monkeypatch):
     made = []
+    options_made = []
 
-    def create_client(url, key):
+    class ClientOptions:
+        def __init__(self, **kwargs):
+            options_made.append(kwargs)
+
+    def create_client(url, key, options=None):
         client = object()
-        made.append(client)
+        made.append((client, options))
         return client
 
-    monkeypatch.setitem(sys.modules, "supabase", SimpleNamespace(create_client=create_client))
+    monkeypatch.setitem(
+        sys.modules,
+        "supabase",
+        SimpleNamespace(ClientOptions=ClientOptions, create_client=create_client),
+    )
     monkeypatch.setattr(auth, "_secret", lambda key, default=None: {
         "SUPABASE_URL": "https://example.invalid", "SUPABASE_ANON_KEY": "anon"
     }.get(key, default))
@@ -38,6 +47,10 @@ def test_supabase_client_is_isolated_per_streamlit_session(monkeypatch):
     second = auth.get_supabase()
     assert second is not first
     assert len(made) == 2
+    assert len(options_made) == 2
+    assert all(kwargs["flow_type"] == "pkce" for kwargs in options_made)
+    assert all(isinstance(kwargs["storage"], auth._SupabaseAuthStorage)
+               for kwargs in options_made)
 
 
 def test_checkout_parameters_are_url_encoded(monkeypatch):

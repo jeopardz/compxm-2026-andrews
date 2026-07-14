@@ -12,7 +12,9 @@ Nothing here runs unless authentication is enabled.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import streamlit as st
 
@@ -24,6 +26,11 @@ import streamlit as st
 _PERSIST_LOGIN = True
 _COOKIE_KEY = "compmastery_sb_refresh"
 _COOKIE_DAYS = 30
+_OAUTH_PKCE_COOKIE_KEY = "compmastery_sb_pkce"
+_OAUTH_PKCE_MINUTES = 10
+_OAUTH_URL_STATE_KEY = "_google_oauth_url"
+_OAUTH_ERROR_STATE_KEY = "_oauth_error"
+_OAUTH_QUERY_KEYS = ("code", "error", "error_code", "error_description")
 
 
 # ------------------------------------------------------------------
@@ -49,7 +56,7 @@ def auth_enabled() -> bool:
 
 def get_supabase():
     """Return a Supabase client isolated to this Streamlit browser session."""
-    from supabase import create_client  # lazy: not needed for local mode
+    from supabase import ClientOptions, create_client  # lazy: not needed locally
 
     url = _secret("SUPABASE_URL")
     key = _secret("SUPABASE_ANON_KEY")
@@ -57,7 +64,12 @@ def get_supabase():
         raise RuntimeError("SUPABASE_URL / SUPABASE_ANON_KEY missing from secrets")
     client = st.session_state.get("_supabase_client")
     if client is None:
-        client = create_client(url, key)
+        # Supabase OAuth uses PKCE by default. Its code verifier normally lives in
+        # process-local storage, but an OAuth redirect can create a new Streamlit
+        # session. Keep only that short-lived verifier in a browser cookie so the
+        # callback can exchange the authorization code reliably.
+        options = ClientOptions(flow_type="pkce", storage=_SupabaseAuthStorage())
+        client = create_client(url, key, options=options)
         st.session_state["_supabase_client"] = client
     return client
 
@@ -84,6 +96,21 @@ def _cm():
     return st.session_state.get("_cookie_mgr")
 
 
+def _context_cookie_get(key: str) -> Optional[str]:
+    """Read a cookie from the initial HTTP request when the component is loading."""
+    try:
+        return st.context.cookies.get(key)
+    except Exception:
+        return None
+
+
+def _is_https() -> bool:
+    try:
+        return str(st.context.url).lower().startswith("https://")
+    except Exception:
+        return True
+
+
 def _cookie_get() -> Optional[str]:
     cm = _cm()
     if cm is None:
@@ -99,7 +126,6 @@ def _cookie_set(refresh_token: str) -> None:
     if cm is None:
         return
     try:
-        from datetime import datetime, timedelta, timezone
         cm.set(_COOKIE_KEY, refresh_token, key="cookie_set",
                expires_at=datetime.now(timezone.utc) + timedelta(days=_COOKIE_DAYS))
     except Exception:
@@ -114,6 +140,71 @@ def _cookie_delete() -> None:
         cm.delete(_COOKIE_KEY, key="cookie_del")
     except Exception:
         pass
+
+
+def _oauth_verifier_get() -> Optional[str]:
+    cm = _cm()
+    if cm is not None:
+        try:
+            value = cm.get(_OAUTH_PKCE_COOKIE_KEY)
+            if value:
+                return value
+        except Exception:
+            pass
+    return _context_cookie_get(_OAUTH_PKCE_COOKIE_KEY)
+
+
+def _oauth_verifier_set(value: str) -> None:
+    cm = _cm()
+    if cm is None:
+        return
+    try:
+        cm.set(
+            _OAUTH_PKCE_COOKIE_KEY,
+            value,
+            key="oauth_pkce_set",
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=_OAUTH_PKCE_MINUTES),
+            secure=_is_https(),
+            same_site="lax",
+        )
+    except Exception:
+        pass
+
+
+def _oauth_verifier_delete() -> None:
+    cm = _cm()
+    if cm is None:
+        return
+    try:
+        cm.delete(_OAUTH_PKCE_COOKIE_KEY, key="oauth_pkce_del")
+    except Exception:
+        pass
+
+
+class _SupabaseAuthStorage:
+    """Session storage with durable, short-lived handling for the PKCE verifier."""
+
+    def _state(self) -> dict:
+        return st.session_state.setdefault("_supabase_auth_storage", {})
+
+    @staticmethod
+    def _is_code_verifier(key: str) -> bool:
+        return key.endswith("-code-verifier")
+
+    def get_item(self, key: str) -> Optional[str]:
+        if self._is_code_verifier(key):
+            return _oauth_verifier_get() or self._state().get(key)
+        return self._state().get(key)
+
+    def set_item(self, key: str, value: str) -> None:
+        self._state()[key] = value
+        if self._is_code_verifier(key):
+            _oauth_verifier_set(value)
+
+    def remove_item(self, key: str) -> None:
+        self._state().pop(key, None)
+        if self._is_code_verifier(key):
+            _oauth_verifier_delete()
 
 
 # ------------------------------------------------------------------
@@ -139,6 +230,8 @@ def _store_session(session) -> None:
     st.session_state["sb_refresh_token"] = session.refresh_token
     st.session_state["user_id"] = session.user.id
     st.session_state["user_email"] = session.user.email
+    st.session_state.pop(_OAUTH_URL_STATE_KEY, None)
+    _oauth_verifier_delete()
     if session.refresh_token:
         _cookie_set(session.refresh_token)
 
@@ -172,9 +265,12 @@ def restore_session() -> bool:
 
 def clear_session() -> None:
     for k in ("sb_access_token", "sb_refresh_token", "user_id", "user_email",
-              "_full_access_cache", "_cookie_written", "_supabase_client"):
+              "_full_access_cache", "_cookie_written", "_supabase_client",
+              "_supabase_auth_storage", _OAUTH_URL_STATE_KEY,
+              _OAUTH_ERROR_STATE_KEY):
         st.session_state.pop(k, None)
     _cookie_delete()
+    _oauth_verifier_delete()
 
 
 # ------------------------------------------------------------------
@@ -220,6 +316,90 @@ def sign_out() -> None:
     clear_session()
 
 
+def _oauth_redirect_url() -> str:
+    """Return this deployment's stable callback URL without query parameters."""
+    configured = str(_secret("APP_URL", "") or "").strip()
+    current = configured or str(st.context.url)
+    parsed = urlsplit(current)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
+
+
+def _google_oauth_url() -> Optional[str]:
+    """Create one Google authorization URL per Streamlit browser session."""
+    cached = st.session_state.get(_OAUTH_URL_STATE_KEY)
+    if cached:
+        return cached
+    try:
+        response = get_supabase().auth.sign_in_with_oauth(
+            {
+                "provider": "google",
+                "options": {"redirect_to": _oauth_redirect_url()},
+            }
+        )
+        url = getattr(response, "url", None)
+        if url:
+            st.session_state[_OAUTH_URL_STATE_KEY] = url
+            return url
+    except Exception:
+        pass
+    return None
+
+
+def _clear_oauth_query_params() -> None:
+    for key in _OAUTH_QUERY_KEYS:
+        try:
+            del st.query_params[key]
+        except (KeyError, AttributeError):
+            pass
+
+
+def _handle_oauth_callback() -> None:
+    """Exchange Google's one-time callback code for a Supabase user session."""
+    try:
+        code = st.query_params.get("code")
+        provider_error = st.query_params.get("error")
+    except Exception:
+        return
+
+    if provider_error:
+        _clear_oauth_query_params()
+        _oauth_verifier_delete()
+        st.session_state.pop(_OAUTH_URL_STATE_KEY, None)
+        st.session_state[_OAUTH_ERROR_STATE_KEY] = (
+            "Google sign-in was cancelled or could not be completed. Please try again."
+        )
+        st.rerun()
+
+    if not code:
+        return
+
+    if not _oauth_verifier_get():
+        _clear_oauth_query_params()
+        st.session_state.pop(_OAUTH_URL_STATE_KEY, None)
+        st.session_state[_OAUTH_ERROR_STATE_KEY] = (
+            "The Google sign-in session expired. Please start again."
+        )
+        st.rerun()
+
+    try:
+        response = get_supabase().auth.exchange_code_for_session({"auth_code": code})
+        if not response or not response.session:
+            raise RuntimeError("OAuth callback returned no session")
+        _store_session(response.session)
+        _oauth_verifier_delete()
+        st.session_state.pop(_OAUTH_URL_STATE_KEY, None)
+        _clear_oauth_query_params()
+        st.rerun()
+    except Exception:
+        _oauth_verifier_delete()
+        st.session_state.pop(_OAUTH_URL_STATE_KEY, None)
+        _clear_oauth_query_params()
+        st.session_state[_OAUTH_ERROR_STATE_KEY] = (
+            "Google sign-in failed. Please try again."
+        )
+        st.rerun()
+
+
 # ------------------------------------------------------------------
 # UI
 # ------------------------------------------------------------------
@@ -235,6 +415,17 @@ def render_login_page() -> None:
         "- Review market reports and a balanced scorecard after every round"
     )
     st.caption("Sign in to save your games and track your progress.")
+
+    oauth_error = st.session_state.pop(_OAUTH_ERROR_STATE_KEY, None)
+    if oauth_error:
+        st.error(oauth_error)
+
+    google_url = _google_oauth_url()
+    if google_url:
+        st.link_button("Continue with Google", google_url, width="stretch")
+        st.caption("Or continue with email")
+    else:
+        st.warning("Google sign-in is temporarily unavailable. You can still use email.")
 
     tab_in, tab_up, tab_reset = st.tabs(["Sign in", "Create account", "Forgot password"])
 
@@ -278,6 +469,7 @@ def require_login() -> None:
     In local mode this is a no-op, so the study app is unchanged."""
     if not auth_enabled():
         return
+    _handle_oauth_callback()
     if not is_logged_in():
         restore_session()
     if not is_logged_in():
